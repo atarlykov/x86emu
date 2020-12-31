@@ -137,6 +137,12 @@ public class Cpu {
     int mem8(int offset) {
         return 0;
     }
+
+    /**
+     * writes lowest byte of value to memory at offset
+     * @param offset
+     * @param value
+     */
     void mem8(int offset, int value) {
     }
 
@@ -319,7 +325,7 @@ public class Cpu {
 
     //    Reg/mem and reg       001110dw mrr    disp disp
     //    Imm with reg/mem      100000sw m111r  disp disp data data(s:w=01)
-    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p166 table 4-12
+    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
 
 
     Opcode[] opcodes = new Opcode[256];
@@ -369,6 +375,12 @@ public class Cpu {
      */
     void debug() {
 
+        try {
+            byte[] bytes = Files.readAllBytes(Paths.get("D:\\work\\emu\\codegolf"));
+            System.arraycopy(bytes, 0, memory, 0, bytes.length);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         registers[Cpu.SP] = 0x100;
 
@@ -424,6 +436,17 @@ public class Cpu {
                 }
                 cpu.registers[regIndex] = regFullValue;
             }
+        }
+
+        /**
+         * writes segment register indexed by regIndex
+         * @param cpu ref to cpu instance
+         * @param regIndex index of segment register
+         * @param value value to write
+         */
+        public static void writeSegment(Cpu cpu, int regIndex, int value)
+        {
+            cpu.segments[regIndex] = value & 0xFFFF;
         }
 
     }
@@ -518,7 +541,7 @@ public class Cpu {
     }
 
     // Additions: ADD ADC INC AAA DAA
-    // opcodes: [p165],  flags: [p50]
+    // opcodes: [p4-23],  flags: [p2-35]
     // ADD (af,cf,of,pf,sf,zf)
     //    Reg/mem with reg to either  000000dw mrr   disp     disp
     //    imm to reg/mem              100000sw m000r disp     disp    data   data(if s:w=01)
@@ -767,7 +790,7 @@ public class Cpu {
     // CMP
     //    Reg/mem and reg       001110dw mrr    disp disp
     //    Imm with reg/mem      100000sw m111r  disp disp data data(s:w=01)
-    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p166 table 4-12
+    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
     //
     public static class Cmp {
 
@@ -840,7 +863,7 @@ public class Cpu {
         }
 
 
-        //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p166 table 4-12
+        //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
         public static class CmpAccImm extends Opcode
         {
             @Override
@@ -880,4 +903,147 @@ public class Cpu {
         }
     }
 
+
+    public static class Mov {
+        // reg/mem to/from reg      100010dw  mrr       disp    disp
+        // imm to reg/mem           1100011w  m000r     disp    disp data data(w=1)
+        // imm to reg               1011wreg  data      data(w=1)
+        // mem to accumulator       1010000w  addr.low  addr.hi
+        // accumulator to memory    1010001w  addr.low  addr.hi
+        // reg/mem to seg reg       10001110  m0SRr     disp    disp
+        // seg reg to reg/mem       10001100  m0SRr     disp    disp
+
+        public static class MovRmR extends Opcode
+        {
+            @Override
+            public void execute(Cpu cpu, int opcode)
+            {
+                cpu.readAndProcessModRegRm(opcode);
+                boolean w = (opcode & 0b0000_0001) == 0b01;
+                boolean d = (opcode & 0b0000_0010) == 0b10;
+
+                if (d) {
+                    // reg <<- mor r/m
+                    Opcode.writeRegister(cpu, w, cpu.mrrRegIndex, cpu.mrrModValue);
+                }
+                else {
+                    // mod r/m <<- reg
+                    if ((cpu.mrrMod ^ 0b11) == 0) {
+                        // mod r/m is a register
+                        Opcode.writeRegister(cpu, w, cpu.mrrModRegIndex, cpu.mrrRegValue);
+                    } else {
+                        // mod r/m is memory
+                        if (w) {
+                            cpu.mem16(cpu.mrrModEA, cpu.mrrRegValue);
+                        } else {
+                            cpu.mem8( cpu.mrrModEA, cpu.mrrRegValue);
+                        }
+                    }
+                }
+            }
+        }
+
+        public static class MovRmImm extends Opcode
+        {
+            @Override
+            public void execute(Cpu cpu, int opcode)
+            {
+                cpu.readAndProcessModRegRm(opcode);
+                boolean w = (opcode & 0b0000_0001) == 0b01;
+
+                int imm;
+                if (w) {
+                    imm = cpu.read16();
+                } else {
+                    imm = cpu.read8();
+                }
+
+                // mod r/m <<- imm
+                if ((cpu.mrrMod ^ 0b11) == 0) {
+                    // mod r/m is a register
+                    Opcode.writeRegister(cpu, w, cpu.mrrModRegIndex, imm);
+                } else {
+                    // mod r/m is memory
+                    if (w) {
+                        cpu.mem16(cpu.mrrModEA, imm);
+                    } else {
+                        cpu.mem8( cpu.mrrModEA, imm);
+                    }
+                }
+            }
+        }
+
+        public static class MovRegImm extends Opcode
+        {
+            @Override
+            public void execute(Cpu cpu, int opcode)
+            {
+                boolean w = (opcode & 0b0000_1000) != 0b0000;
+                int regIndex = opcode & 0b0111;
+
+                int imm;
+                if (w) {
+                    imm = cpu.read16();
+                } else {
+                    imm = cpu.read8();
+                }
+
+                Opcode.writeRegister(cpu, w, regIndex, imm);
+            }
+        }
+
+        public static class MovMemAcc extends Opcode
+        {
+            @Override
+            public void execute(Cpu cpu, int opcode)
+            {
+                boolean w = (opcode & 0b0000_0001) != 0b0000;
+                // here 'd' is not standard 'd', but:
+                // 0 - mem to acc
+                // 1 - acc to mem
+                boolean d = (opcode & 0b0000_0010) != 0b0000;
+
+                cpu.readDisplacement();
+
+                if (d) {
+                    if (w) {
+                        cpu.mem16(cpu.displacement, cpu.registers[Cpu.AX]);
+                    } else {
+                        cpu.mem8(cpu.displacement, cpu.registers[Cpu.AX]);
+                    }
+                } else {
+                    // just read 16, write will handle it based on 'w'
+                    int eaValue = cpu.mem16(cpu.displacement);
+                    Opcode.writeRegister(cpu, w, Cpu.AX, eaValue);
+                }
+            }
+        }
+
+        public static class MovRmSR extends Opcode
+        {
+            @Override
+            public void execute(Cpu cpu, int opcode)
+            {
+                // here 'd' is not standard 'd', but:
+                // 0 - segment reg to r/m
+                // 1 - r/m to segment reg
+                boolean d = (opcode & 0b0000_0010) != 0b0000;
+
+                cpu.readAndProcessModRegRm(opcode);
+
+                if (d) {
+                    Opcode.writeSegment(cpu, cpu.mrrReg, cpu.mrrModValue);
+                } else {
+                    // mod r/m <<- seg
+                    if ((cpu.mrrMod ^ 0b11) == 0) {
+                        // mod r/m is a register
+                        Opcode.writeRegister(cpu, true, cpu.mrrModRegIndex, cpu.segments[cpu.mrrReg]);
+                    } else {
+                        // mod r/m is memory
+                        cpu.mem16(cpu.mrrModEA, cpu.segments[cpu.mrrReg]);
+                    }
+                }
+            }
+        }
+    }
 }
