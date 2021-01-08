@@ -1,28 +1,15 @@
 package at.emu.i8086;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Formatter;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * state of the emulates i8086 cpu
  */
-public class Cpu {
-    /**
-     * Zero, sign and carry check masks, byte mode
-     */
-    public static final int BYTE_MASK_Z   = 0x00FF;
-    public static final int BYTE_MASK_S   = 0x0080;
-    public static final int BYTE_MASK_C   = 0x0100;
-    /**
-     * Zero sign and curry check masks, word mode
-     */
-    public static final int WORD_MASK_Z   = 0x0FFFF;
-    public static final int WORD_MASK_S   = 0x08000;
-    public static final int WORD_MASK_C   = 0x10000;
-
+public class Cpu
+{
 
     // registers' indices in the registers array
     public static final int AX = 0;
@@ -63,7 +50,6 @@ public class Cpu {
     // Overflow never occurs when the sign of two addition operands are different
     // (or the sign of two subtraction operands are the same)
     //
-    // flag register masks
     public static final int FLAG_CF = 0b0000_0000_0000_0001;    // status  flag: carry, add/sub/rotate, carry out/borrow into high bit
     public static final int FLAG_PF = 0b0000_0000_0000_0100;    // status  flag: parity, set if result has even parity, even number of 1-bits
     public static final int FLAG_AF = 0b0000_0000_0001_0000;    // status  flag: auxiliary carry
@@ -75,163 +61,238 @@ public class Cpu {
     public static final int FLAG_OF = 0b0000_1000_0000_0000;    // status  flag: overflow, arithmetic overflow, exception generated if available?
 
     /**
-     *
-     * logical address sources (table 2-2)
-     * -------------------------------+---------+----------+---------+
-     *   type of mem ref              | def seg |  alt seg |  offset |
-     * -------------------------------+---------+----------+---------+
-     *   instruction fetch            |   cs    |   none   |    ip   |
-     *   stack operation              |   ss    |   none   |    sp   |
-     *   variable (except following)  |   ds    | cs,es,ss |    ea   |
-     *   str src                      |   ds    | cs,es,ss |    si   |
-     *   str dst                      |   es    |   none   |    di   |
-     *   bp used as base reg          |   ss    | cs,ds,ss |    ea   |
-     *
-     *
-     * stack:
-     *  ss:sp    ->> [(ss << 8) | sp]
-     *  push ax  ->>  sp -= 2; [ss:sp] = ax;
-     *  pop ax   ->>  ax = [ss:sp]; sp += 2;
-     *  so ss:00 is the full stack
+     * flags positions inside the register
      */
+    public static final int FLAG_CF_POS = 0;
+    public static final int FLAG_PF_POS = 2;
+    public static final int FLAG_ZF_POS = 6;
+    public static final int FLAG_SF_POS = 7;
+    public static final int FLAG_DF_POS = 10;
+    public static final int FLAG_OF_POS = 11;
+
+    /**
+     * Zero, sign and carry check masks, byte mode
+     */
+    public static final int BYTE_MASK       = 0x00FF;
+    public static final int BYTE_MASK_SIGN  = 0x0080;
+    public static final int BYTE_MASK_CARRY = 0x0100;
+    public static final int BYTE_POS_SIGN   = 7;
+    public static final int BYTE_POS_CARRY  = 8;
+    /**
+     * Zero sign and curry check masks, word mode
+     */
+    public static final int WORD_MASK       = 0x0FFFF;
+    public static final int WORD_MASK_SIGN  = 0x08000;
+    public static final int WORD_MASK_CARRY = 0x10000;
+    public static final int WORD_POS_SIGN   = 15;
+    public static final int WORD_POS_CARRY  = 16;
 
 
-    // common registers
+    /**
+     * Interrupts
+     */
+    public static final int INT_0_DIVIDE_ERROR      = 0;
+    public static final int INT_1_SINGLE_STEP       = 1;
+    public static final int INT_2_NMI               = 2;
+    public static final int INT_3_BREAKPOINT        = 3;
+    public static final int INT_4_OVERFLOW          = 4;
+    public static final int INT_8_IRQ0_SYS_TIMER    = 8;
+    public static final int INT_9_IRQ1_KBD_READY    = 9;
+    public static final int INT_0B_IRQ3_COM2        = 0x0B;
+    public static final int INT_0C_IRQ4_COM1        = 0x0C;
+    public static final int INT_0D_IRQ5_DISK_LPT    = 0x0D;
+    public static final int INT_0E_IRQ6_FLOPPY      = 0x0E;
+    public static final int INT_0F_IRQ7_LPT         = 0x0F;
+
+    public static final int INT_10_VIDEO            = 0x10;
+    public static final int INT_11_BIOS_EQUIPMENT   = 0x11;
+    public static final int INT_12_BIOS_MEM_SIZE    = 0x12;
+    public static final int INT_13_DISK             = 0x13;
+    public static final int INT_19_SYS_BOOT_LOAD    = 0x19;
+    public static final int INT_1A_TIME             = 0x1A;
+    public static final int INT_1C_TIME             = 0x1C;
+
+
+    public void nmi(int number) {
+    }
+
+    /**
+     * Executes interrupts with the specified type,
+     * saves flags and cs:ip into the stack, resets TF and IF
+     * @param type type (number) of the interrupt
+     */
+    public void interrupt(int type)
+    {
+        push16(flags);
+        flags &= (~Cpu.FLAG_TF | ~Cpu.FLAG_IF);
+        push16(registers[Cpu.CS]);
+        push16(ip);
+
+        // interrupt vector
+        int offset = type * 4;
+        registers[Cpu.CS] = mread16Direct(0x0000, offset + 2);
+        ip = mread16Direct(0x0000, offset);
+    }
+
+
+
+
+    // common registers AX,CX,DX,BX,SP,BP,SI,DI
     int[] registers = new int[8];
-    // segment registers
+
+    // segment registers CS,DS,SS,ES
     int[] segments = new int[4];
+
+    // effective linear address of a segment
+    // that is default for the CURRENT opcode,
+    // calculated based on opcode operands and
+    // possible segment override prefix
+    int effOpcodeMemSegment;
+
+    // index of the segment that must be used
+    // instead of the default opcode segment
+    // for the CURRENT opcode,
+    // value (-1) means - there is no override,
+    // value is controlled by the @Control.Segment opcode
+    int overrideSegmentIndex = -1;
+
+    // halt state of the processor
+    boolean hlt;
+
+    // lock prefix for the current opcode
+    boolean lockPrefix;
+    // rep prefix for the current opcode
+    boolean repPrefix;
+    // value of the rep prefix
+    int     rep;
+
+
+
 
     // instruction pointer
     int ip;
+
     // flag register
     int flags;
 
+    // various details from
+    // parsed mode-ref-reg/mem byte
+    int mrrMod;             // mod-reg-r/m:  mod part
+    int mrrReg;             // mod-reg-r/m:  reg part
+    int mrrRm;              // mod-reg-r/m:  r/m part
 
-    int opcode;             // current opcode
-    boolean d, w, s, v ,z;  // bits in opcode
+    int mrrModRegIndex;     // mod-reg-r/m:  mod == 11  ->> r/m parsed as register index
+    int mrrModRegValue;     // mod-reg-r/m:  mod == 11  ->> register[mrrModRegIndex]  depends on w(8|16)
+    int mrrModEA;           // mod-reg-r/m:  mod ==!11  ->> mod-r/m parsed and calculated as ea
+    int mrrModEAValue;      // mod-reg-r/m:  mod ==!11  ->> preloaded value from mem[xx : mrrModEA] depends on w(8|16)
+    int mrrModValue;        // mod-reg-r/m:  any mod    ->> mrrModRegValue | mrrModEAValue depending on mod
 
-    int displacement;
-    int data;
-
-    int mrrMod;             // mod-reg-r/m: mod part
-    int mrrReg;             // mod-reg-r/m: reg part
-    int mrrRm;              // mod-reg-r/m: r/m part
-
-    int mrrModRegIndex;     // mod-reg-r/m:  mod == 11  ->> mod parsed as register index
-    int mrrModRegValue;     // mod-reg-r/m:  mod == 11  ->> register[mrrModRegIndex]  depends on w(8|16) and d(from|to)?
-    int mrrModEA;           // mod-reg-r/m:  mod ==!11  ->> mod parsed and calculated as ea
-    int mrrModEAValue;      // mod-reg-r/m:  mod ==!11  ->> mem[xx : mrrModEA] depends on w(8|16) and d(from|to)?
-    int mrrModValue;        // mod-reg-r/m:  any mod    --> mrrModRegValue | mrrModEAValue depending on mod (not to parse later)
-
-    int mrrRegIndex;        // mod-reg-r/m:  reg parsed as register index
-    int mrrRegValue;        // mod-reg-r/m:  register[mrrRegIndex] depends on w(8|16) and d(from|to)?
-
-
-
-    byte[] memory = new byte[1024 * 1024];
-    int mem16(int offset) {
-        return 0;
-    }
-    void mem16(int offset, int value) {
-    }
-    int mem8(int offset) {
-        return 0;
-    }
+    int mrrRegIndex;        // mod-reg-r/m:  reg part is parsed as register index
+    int mrrRegValue;        // mod-reg-r/m:  register[mrrRegIndex] depends on w(8|16)
 
     /**
-     * writes lowest byte of value to memory at offset
-     * @param offset
-     * @param value
+     * writes one of common registers based on reg index and byte/word mode,
+     * value is cleared with byte (0xff) or word (0xffff) mask
+     * @param word word mode (1) and byte mode (0)
+     * @param regIndex index of the register to write
+     * @param value value to write (8 or 16 bits based on word)
      */
-    void mem8(int offset, int value) {
-    }
-
-
-
-    /**
-     * sets flag(s) specified in the mask with "1"
-     * @param mask flags' mask
-     */
-    void setFlag(int mask) {
-        flags |= mask;
-    }
-
-    /**
-     * cleats flags that specified in the mask with "1"
-     * @param mask mask
-     */
-    void resetFlag(int mask) {
-        flags &= ~mask;
-    }
-
-    /**
-     * reads next byte moving instruction pointer by one,
-     * usually reads at CS:IP, todo: 0x2E CS override prefix??
-     * @return byte read
-     */
-    int read8() {
-        // todo read by effective addr
-        return Byte.toUnsignedInt(memory[ip++]);
-    }
-
-    /**
-     * reads next two bytes moving instruction pointer by two,
-     * reads low byte than hi byte
-     * @return word read
-     */
-    int read16() {
-        //int value = read8();
-        //value |= (read8() << 8);
-        //return value;
-        return read8() | (read8() << 8);
-    }
-
-    void readDisplacement() {
-        displacement = read8() | (read8() << 8);
-    }
-
-    void readData(int opcode) {
-        data = read8();
-        if ((opcode & 0b00000001) != 0) {
-            data |= read8() << 8;
+    public void writeRegister(boolean word, int regIndex, int value)
+    {
+        if (word) {
+            registers[regIndex] = value & 0xFFFF;
+        } else {
+            int regFullValue = registers[regIndex];
+            regFullValue &= 0xFF00;
+            regFullValue |= (value & 0xFF);
+            registers[regIndex] = regFullValue;
         }
     }
 
     /**
-     * reads opcode variable
+     * writes one of common registers based on reg index
+     * value is cleared with word (0xffff) mask
+     * @param regIndex index of the register to write
+     * @param value value to write (16 bits)
      */
-    void readOpcode() {
-        opcode = read8();
+    public void writeRegisterWord(int regIndex, int value)
+    {
+        registers[regIndex] = value & 0xFFFF;
     }
 
     /**
-     * reads and divides mod-reg-r/m byte into local variables,
-     * see Cpu.mrrXXX for details
-     *
+     * write upper byte of the specified register
+     * @param regIndex register index
+     * @param value byte value to write into upper part
      */
-    void readModRegRm()
+    public void writeRegisterUpperByte(int regIndex, int value)
     {
-        int value = read8();
-        mrrMod = value >> 6;
-        mrrReg = (value & 0b00111000) >> 3;
-        mrrRm  = (value & 0b00000111);
+        int regFullValue = registers[regIndex];
+        regFullValue &= 0x00FF;
+        regFullValue |= (value & 0xFF) << 8;
+        registers[regIndex] = regFullValue;
     }
+
+    /**
+     * write low byte of the specified register
+     * @param regIndex register index
+     * @param value byte value to write into upper part
+     */
+    public void writeRegisterLowByte(int regIndex, int value)
+    {
+        int regFullValue = registers[regIndex];
+        regFullValue &= 0xFF00;
+        regFullValue |= (value & 0xFF);
+        registers[regIndex] = regFullValue;
+    }
+
+    /**
+     * writes segment register indexed by regIndex,
+     * value is cleared with 0xffff mask
+     * @param regIndex index of segment register
+     * @param value value to write
+     */
+    public void writeSegment(int regIndex, int value)
+    {
+        segments[regIndex] = value & 0xFFFF;
+    }
+
+
 
     /**
      * Reads mod-reg-r/m byte pointed with instruction pointer and parses it
      * into internal cpu fields ready to be processed by an opcode function.
+     *
+     *  table 4-10
+     *  ------------------+----------+--------------+----------------+------------------+------------
+     *  mod=11            |               effective address calculation                 |
+     *  ------------------+----------+--------------+----------------+------------------+    def
+     *  r/m    w=0    w=1 |     r/m  |  mod=00      |  mod=01        |  mod=10          |  segment
+     *  ------------------+----------+--------------+----------------+------------------+------------
+     *  000    al     ax  |     000  |  bx + si     |  bx + si + d8  |  bx + si + d16   |    ds
+     *  001    cl     cx  |     001  |  bx + di     |  bx + di + d8  |  bx + di + d16   |    ds
+     *  010    dl     dx  |     010  |  bp + si     |  bp + si + d8  |  bp + si + d16   |      ss
+     *  011    bl     bx  |     011  |  bp + di     |  bp + di + d8  |  bp + di + d16   |      ss
+     *  100    ah     sp  |     100  |  si          |  si + d8       |  si + d16        |    ds
+     *  101    ch     bp  |     101  |  di          |  di + d8       |  di + d16        |    ds
+     *  110    bh     si  |     110  |  direct addr |  bp + d8       |  bp + d16        |      ss (if bp)
+     *  111    dh     di  |     111  |  bx          |  bx + d8       |  bx + d16        |    ds
+     *
      * See Cpu.mrrXXX fields for detailed description
      * @param opcode current opcode to which mod-reg-r/m belongs to
      */
-    void readAndProcessModRegRm(int opcode)
+    void readModRegRm(int opcode)
     {
-        // read byte and parse to mod-reg-r/m
-        readModRegRm();
+        // read and divide mod-reg-r/m byte into local variables
+        int mrr = ipRead8();
+        mrrMod = mrr >> 6;
+        mrrReg = (mrr & 0b00111000) >> 3;
+        mrrRm  = (mrr & 0b00000111);
 
         // check if opcode is in word (16 bit) mode ir 8 bit mode
         boolean w = (opcode & 0b0000_0001) == 1;
 
-        // parse -reg- part (not necessary when reg is opcode ext)
+        // parse -reg- part (it could be an opcode extension sometimes)
         mrrRegIndex = mrrReg;
         if (w) {
             // 16 bit mode, all 8 registers
@@ -271,133 +332,466 @@ public class Cpu {
             mrrModValue = mrrModRegValue;
         }
         else {
-            // mod!=11, mod + r/m give effective address
+            // mod!=11, mod+r/m give effective address
+
+            // default memory segment for the opcode
+            int eff = Cpu.DS;
 
             // base template for all variants for mod: 00|01|10
-            mrrModEA = switch (mrrRm) {
-                case 0b000 -> registers[BX] + registers[SI];
-                case 0b001 -> registers[BX] + registers[DI];
-                case 0b010 -> registers[BP] + registers[SI];
-                case 0b011 -> registers[BP] + registers[DI];
-                case 0b100 -> registers[SI];
-                case 0b101 -> registers[DI];
-                case 0b110 -> registers[BP];
-                case 0b111 -> registers[BX];
-                default -> throw new RuntimeException("impossible as r/m contains only 3 bits");
-            };
+            switch (mrrRm) {
+                case 0b000:               mrrModEA = registers[BX] + registers[SI]; break;
+                case 0b001:               mrrModEA = registers[BX] + registers[DI]; break;
+                case 0b010: eff = Cpu.SS; mrrModEA = registers[BP] + registers[SI]; break;
+                case 0b011: eff = Cpu.SS; mrrModEA = registers[BP] + registers[DI]; break;
+                case 0b100:               mrrModEA = registers[SI]; break;
+                case 0b101:               mrrModEA = registers[DI]; break;
+                case 0b110:               mrrModEA = registers[BP]; break;
+                case 0b111:               mrrModEA = registers[BX]; break;
+            }
 
-            if ((mrrMod == 0b00) && (mrrRm == 0b110))
+            if (mrrMod == 0b00)
             {
-                // mod=00 is the template above except for r/m=110,
-                // where it's a direct address as the displacement
-                readDisplacement();
-                mrrModEA = displacement;
+                if (mrrRm == 0b110) {
+                    // mod=00 is the template above except for r/m=110,
+                    // that uses a direct address from the displacement
+                    mrrModEA = ipRead16();
+                } else {
+                    // otherwise it's [bp] based reference,
+                    // use SS segment as default
+                    eff = Cpu.SS;
+                }
             }
             else if (mrrMod == 0b01)
             {
                 // mod=01 is the template + data8
-                int value = read8();
+                int value = ipRead8();
                 mrrModEA += value;
             }
             else if (mrrMod == 0b10)
             {
                 // mod=10 is the template + data16
-                int value = read16();
+                int value = ipRead16();
                 mrrModEA += value;
+            }
+
+            // prepare linear address of opcode mem segment,
+            // will be used in mread/mwrite
+            if (overrideSegmentIndex != -1) {
+                effOpcodeMemSegment = segments[overrideSegmentIndex] << 8;
+            } else {
+                effOpcodeMemSegment = segments[eff] << 8;
             }
 
             // pre-read value from memory, it will be consumed
             // by the operation or will be updated (so let it be in cache)
-            if (w) {
-                mrrModEAValue = mem16(mrrModEA);
-            } else {
-                mrrModEAValue = mem8(mrrModEA);
-            }
+            mrrModEAValue = mread(w, mrrModEA);
 
             // provide unified access to mod-r/m value
             mrrModValue = mrrModEAValue;
+        }
+    }
 
-            // todo: check for overflow, flags?
+    /**
+     * writes value to a register or it's part as pointer by mod-reg-r/m,
+     * with mod=11 and (r/m, word) pointing to a destination
+     * @param word word or byte mode
+     * @param regIndex index of the register to write, MUST follow the word state,
+     *                 true -> 0..7 and false -> 0..3
+     * @param value value to write
+     */
+    public void writeModRegRmRegister(boolean word, int regIndex, int value)
+    {
+        if (word) {
+            registers[regIndex] = value & 0xFFFF;
+        } else {
+            int regFullValue = registers[regIndex];
+            if ((mrrRm & 0b100) == 0) {
+                // lower part (AL, ..)
+                regFullValue &= 0xFF00;
+                regFullValue |= (value & 0xFF);
+            } else {
+                // upper part (AH, ..)
+                regFullValue &= 0x00FF;
+                regFullValue |= (value & 0xFF) << 8;
+            }
+            registers[regIndex] = regFullValue;
+        }
+    }
+
+    /**
+     * writes value to register/mem pointed by mod-r/m parts of mrr
+     *
+     * @param w word or byte
+     * @param value value to wrute
+     */
+    public void writeByModRegRm(boolean w, int value)
+    {
+        if ((mrrMod ^ 0b11) == 0) {
+            // mod r/m is a register
+            writeModRegRmRegister(w, mrrModRegIndex, value);
+        } else {
+            // mod r/m is memory
+            mwrite(w, mrrModEA, value);
         }
     }
 
 
+    /**
+     *   logical address sources (table 2-2)
+     * -------------------------------+---------+----------+---------+
+     *   type of mem ref              | def seg |  alt seg |  offset |
+     * -------------------------------+---------+----------+---------+
+     *   instruction fetch            |   cs    |   none   |    ip   |
+     *   stack operation              |   ss    |   none   |    sp   |
+     *   variable (except following)  |   ds    | cs,es,ss |    ea   |
+     *   str src                      |   ds    | cs,es,ss |    si   |
+     *   str dst                      |   es    |   none   |    di   |
+     *   bp used as base reg          |   ss    | cs,ds,ss |    ea   |
+     */
 
-    //    Reg/mem and reg       001110dw mrr    disp disp
-    //    Imm with reg/mem      100000sw m111r  disp disp data data(s:w=01)
-    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
+    byte[] memory = new byte[1024 * 1024];
 
-
-    Opcode[] opcodes = new Opcode[256];
+    /**
+     * reads from default opcode segment as S:offset, uses current value of S or
+     * some other segment if override opcode prefix is used (cs,es,ss)
+     * @param word reads word if true and byte if false
+     * @param offset offset in data segment
+     * @return data read
+     */
+    int mread(boolean word, int offset)
     {
-        opcodes[0b0011_10_00] = new Cmp.CmpRmR();
-        opcodes[0b0011_10_01] = new Cmp.CmpRmR();
-        opcodes[0b0011_10_10] = new Cmp.CmpRmR();
-        opcodes[0b0011_10_11] = new Cmp.CmpRmR();
-
-        opcodes[0b0011_11_00] = new Cmp.CmpAccImm();
-        opcodes[0b0011_11_01] = new Cmp.CmpAccImm();
-
-
-        opcodes[0b0111_01_00] = new JeJz();
-
-
-        // m111r
-        opcodes[0b1000_00_00] = new Cmp.CmpRmImm();
-        opcodes[0b1000_00_01] = new Cmp.CmpRmImm();
-        opcodes[0b1000_00_10] = new Cmp.CmpRmImm();
-        opcodes[0b1000_00_11] = new Cmp.CmpRmImm();
+        int la = effOpcodeMemSegment + offset;
+        if (word) {
+            return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
+        } else {
+            return memory[la] & 0x00FF;
+        }
     }
 
+    /**
+     * reads from default opcode segment as S:offset, uses current value of S or
+     * some other segment if override opcode prefix is used (cs,es,ss)
+     * @param word reads word if true and byte if false
+     * @param rSeg index of segment register
+     * @param offset offset in data segment
+     * @return data read
+     */
+    int mread(boolean word, int rSeg, int offset)
+    {
+        int la = (segments[rSeg] << 8) + offset;
+        if (word) {
+            return ((memory[la] & 0xFF)) | ((memory[la + 1] & 0xFF) << 8);
+        } else {
+            return ((int)memory[la]) & 0x00FF;
+        }
+    }
+
+    /**
+     * reads from default opcode segment as S:offset, uses current value of S or
+     * some other segment if override opcode prefix is used (cs,es,ss)
+     * @param offset offset in data segment
+     * @return data read
+     */
+    int mread8(int offset)
+    {
+        int la = effOpcodeMemSegment + offset;
+        return memory[la] & 0x00FF;
+    }
+
+    /**
+     * reads from the specified segment as S:offset
+     * @param rSeg index of segment register
+     * @param offset offset in data segment
+     * @return data read
+     */
+    int mread8(int rSeg, int offset)
+    {
+        int la = (segments[rSeg] << 8) + offset;
+        return (memory[la] & 0xFF);
+    }
+
+    /**
+     * reads from default opcode segment as S:offset, uses current value of S or
+     * some other segment if override opcode prefix is used (cs,es,ss)
+     * @param offset offset in data segment
+     * @return data read
+     */
+    int mread16(int offset)
+    {
+        int la = effOpcodeMemSegment + offset;
+        return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
+    }
+
+    /**
+     * reads from the specified segment as S:offset
+     * @param rSeg index of segment register
+     * @param offset offset in data segment
+     * @return data read
+     */
+    int mread16(int rSeg, int offset)
+    {
+        int la = (segments[rSeg] << 8) + offset;
+        return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
+    }
+
+    /**
+     * reads from the specified segment and offset
+     * @param seg value of a segment
+     * @param offset offset in segment
+     * @return data read
+     */
+    int mread16Direct(int seg, int offset)
+    {
+        int la = (seg << 8) + offset;
+        return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
+    }
+
+    /**
+     * reads by the absolute memory address (20 bit)
+     * @param offset offset from memory base
+     * @return data read
+     */
+    int mread16Direct(int offset)
+    {
+        int la = offset;
+        return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
+    }
+
+
+
+
+    /**
+     * writes to default opcode segment as S:offset, uses current value of S or
+     * some other segment if override opcode prefix is used (cs,es,ss)
+     * @param word writes word if true and byte if false
+     * @param offset offset in data segment
+     * @param value value to write
+     */
+    void mwrite(boolean word, int offset, int value)
+    {
+        int la = effOpcodeMemSegment + offset;
+        memory[la] = (byte)value;
+        if (word) {
+            memory[la + 1] = (byte)(value >> 8);
+        }
+    }
+
+    void mwrite16(int offset, int value)
+    {
+        int la = effOpcodeMemSegment + offset;
+        memory[la] = (byte)value;
+        memory[la + 1] = (byte)(value >> 8);
+    }
+
+    void mwrite16(int rSeg, int offset, int value)
+    {
+        int la = (segments[rSeg] << 8) + offset;
+        memory[la] = (byte)value;
+        memory[la + 1] = (byte)(value >> 8);
+    }
+
+    void mwrite8(int rSeg, int offset, int value)
+    {
+        int la = (segments[rSeg] << 8) + offset;
+        memory[la] = (byte)value;
+    }
+
+    /**
+     * stack support routines
+     *  ss:sp    ->> [(ss << 8) | sp]
+     *  push ax  ->>  sp -= 2; [ss:sp] = ax;
+     *  pop ax   ->>  ax = [ss:sp]; sp += 2;
+     *  ss:00 is the full stack
+     */
+
+    /**
+     * generic stack push method, uses SS:SP as the position
+     * to place the data (SP-1 for byte, and SP-2 fow word)
+     * @param word word of byte mode
+     * @param value value to place
+     */
+    void push(boolean word, int value)
+    {
+        registers[SP] -= 1;
+        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        memory[la] = (byte) value;
+        if (word) {
+            registers[SP] -= 1;
+            memory[la + 1] = (byte)(value >> 8);
+        }
+    }
+
+    /**
+     * stack push method, uses SS:SP-2 as the position
+     * @param value value to place
+     */
+    void push16(int value)
+    {
+        registers[SP] -= 2;
+        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        memory[la] = (byte) value;
+        memory[la + 1] = (byte)(value >> 8);
+    }
+
+    /**
+     * stack pop method, uses SS:SP as the position
+     * @return word read from stack
+     */
+    int pop16()
+    {
+        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        registers[SP] += 2;
+        return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
+    }
+
+    /**
+     * stack push method, uses SS:SP-1 as the position
+     * @param value value to place
+     */
+    void push8(int value)
+    {
+        registers[SP] -= 1;
+        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        memory[la] = (byte) value;
+    }
+
+    /**
+     * stack pop method, uses SS:SP as the position
+     * @return byte read from stack
+     */
+    int pop8()
+    {
+        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        registers[SP] += 1;
+        return memory[la] & 0xFF;
+    }
+
+
+
+
+    /**
+     * sets flag(s) specified in the mask with "1"
+     * @param mask flags' mask
+     */
+    void setFlag(int mask) {
+        flags |= mask;
+    }
+
+    /**
+     * cleats flags that specified in the mask with "1"
+     * @param mask mask
+     */
+    void resetFlag(int mask) {
+        flags &= ~mask;
+    }
+
+    /**
+     * reads next byte moving instruction pointer by one
+     * @return byte read
+     */
+    int ipRead8()
+    {
+        // todo could be optimized with cached CS and short ip
+        int tmp = memory[(segments[Cpu.CS] << 8) + (ip & 0xFFFF)] & 0xFF;
+        ip++;
+        return tmp;
+    }
+
+    int ipRead8WithSign()
+    {
+        int tmp = memory[(segments[Cpu.CS] << 8) + (ip & 0xFFFF)];
+        ip++;
+        return tmp;
+    }
+
+    /**
+     * reads next two bytes moving instruction pointer by two,
+     * reads low byte than hi byte
+     * @return word read
+     */
+    int ipRead16()
+    {
+        // todo that could overflow ip
+        int la = (segments[Cpu.CS] << 8) + (ip & 0xFFFF);
+        int tmp = (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
+        ip += 2;
+        return tmp;
+    }
+
+
+    /**
+     * registered opcodes
+     */
+    Opcode[] opcodes = new Opcode[256];
+
+    /**
+     * configuration of opcodes, parsed on init
+     * and populated into opcodes array
+     */
+    OpcodeConfiguration[] configurations = new OpcodeConfiguration[]{
+            new Transfer(),
+            new Cmp(),
+            new Add(),
+            new Sub(),
+            new Multiplication(),
+            new Division(),
+            new Jmp(),
+            new Stack(),
+            new Logic(),
+            new Control(),
+            new Ports(),
+            new Strings(),
+    };
+
+    /**
+     * initializes internal state, opcodes, etc.
+     */
+    public void init()
+    {
+        for (int i = 0; i < configurations.length; i++) {
+            OpcodeConfiguration cfgProvider = configurations[i];
+            Map<String, ?> configuration = cfgProvider.getConfiguration();
+            OpcodeConfiguration.apply(opcodes, configuration);
+        }
+
+        OpcodeConfiguration.dump(opcodes);
+    }
+
+    /**
+     * resets cpu to the initial state
+     * todo: must be 0xF000:FFF0
+     */
     void reset() {
         Arrays.fill(registers, 0x0000);
         Arrays.fill(segments, 0x0000);
         //seg[CS] = 0xFFFF;
         flags = 0;
         ip = 0;
+        hlt = false;
+        overrideSegmentIndex = -1;
     }
-
 
     /**
-     *
-     *
-     * [opcode]  [mod.reg.r/m]  [low.disp/data]  [high.disp/data]  [low.data]  [high.data]
-     *
-     * 	cmp sp, 100h
-     * 	jz cont
-     *
-     * hlt:
-     * 	hlt
-     *
-     * cont:
-     * 	mov sp, 1000h
-     * 	mov al, '.'
+     * Runs one step, executing the next opcode
+     * pointed by cs:ip.
+     * Not intended to be run inside a main cycle,
+     * byt could be run from other opcodes (prefixes), etc.
      */
-    void debug() {
+    void step()
+    {
+        // read next byte from cs:ip,
+        // that could be an opcode
+        // or some prefix
+        int code = ipRead8();
 
-        try {
-            byte[] bytes = Files.readAllBytes(Paths.get("D:\\work\\emu\\codegolf"));
-            System.arraycopy(bytes, 0, memory, 0, bytes.length);
-        } catch (IOException e) {
-            e.printStackTrace();
+        Opcode opcode = opcodes[code];
+        if (opcode == null) {
+            hlt = true;
+            return;
         }
 
-        registers[Cpu.SP] = 0x100;
-
-        int opcode = read8();
-        opcodes[opcode].execute(this, opcode);
-
-        opcode = read8();
-        opcodes[opcode].execute(this, opcode);
-
-        System.out.println("x");
-    }
-
-
-    public static void main(String[] args) {
-        Cpu cpu = new Cpu();
-        cpu.reset();
-        cpu.debug();
+        // call opcode implementation
+        opcode.execute(this, code);
     }
 
 
@@ -413,40 +807,145 @@ public class Cpu {
         public abstract void execute(Cpu cpu, int opcode);
 
         /**
-         * writes one of common registers based on reg index and byte/word mode
-         * @param cpu ref to cpu instance
-         * @param w word mode (1) and byte mode (0)
-         * @param regIndex index of the register to write
-         * @param value new value (8 or 16 bits based on w)
+         * sets PF, SF, ZF cpu flags based on the value provided
+         * @param cpu ref to cpu
+         * @param w word (true) or byte(false) mode
+         * @param value operand
          */
-        public static void writeRegister(Cpu cpu, boolean w, int regIndex, int value)
+        public static void flagsPsz(Cpu cpu, boolean w, int value)
         {
             if (w) {
-                cpu.registers[regIndex] = value & 0xFFFF;
+                flagsPsz16(cpu, value);
             } else {
-                int regFullValue = cpu.registers[regIndex];
-                if ((cpu.mrrRm & 0b100) == 0) {
-                    // upper part (AH, ..)
-                    regFullValue &= 0x00FF;
-                    regFullValue |= (value & 0xFF) << 8;
-                } else {
-                    // lower part (AL, ..)
-                    regFullValue &= 0xFF00;
-                    regFullValue |= (value & 0xFF);
-                }
-                cpu.registers[regIndex] = regFullValue;
+                flagsPsz8(cpu, value);
             }
+
+            /*
+            int zmask, cmask, smask, wValue;
+
+            if (w) {
+                zmask = Cpu.WORD_MASK;
+                cmask = Cpu.WORD_MASK_C;
+                smask = Cpu.WORD_MASK_S;
+            } else {
+                zmask = Cpu.BYTE_MASK;
+                cmask = Cpu.BYTE_MASK_C;
+                smask = Cpu.BYTE_MASK_S;
+            }
+
+            // value without carry
+            wValue = value & zmask;
+
+            int bitCount = Integer.bitCount(wValue & Cpu.BYTE_MASK);
+            if ((bitCount & 0x1) == 0) cpu.setFlag(Cpu.FLAG_PF); else cpu.resetFlag(Cpu.FLAG_PF);
+            if ((wValue & smask) != 0) cpu.setFlag(Cpu.FLAG_SF); else cpu.resetFlag(Cpu.FLAG_SF);
+            if ((wValue & zmask) == 0) cpu.setFlag(Cpu.FLAG_ZF); else cpu.resetFlag(Cpu.FLAG_ZF);
+            */
         }
 
         /**
-         * writes segment register indexed by regIndex
-         * @param cpu ref to cpu instance
-         * @param regIndex index of segment register
-         * @param value value to write
+         * sets PF, SF and ZF flags based on the value provided (8 bit)
+         * @param cpu ref to cpu
+         * @param value value to test
          */
-        public static void writeSegment(Cpu cpu, int regIndex, int value)
+        public static void flagsPsz8(Cpu cpu, int value)
         {
-            cpu.segments[regIndex] = value & 0xFFFF;
+            // value without carry and upper part
+            value &= Cpu.BYTE_MASK;
+
+            int bitCount = Integer.bitCount(value);
+
+            //          ( clear three flags at once)
+            cpu.flags = (cpu.flags & ~(Cpu.FLAG_PF | Cpu.FLAG_SF | Cpu.FLAG_ZF))
+                    // parity at PF position
+                    | ((bitCount & 0x1) << Cpu.FLAG_PF_POS)
+                    // sign at SF position
+                    | ((value >> (Cpu.BYTE_POS_SIGN - Cpu.FLAG_SF_POS)) & Cpu.FLAG_SF);
+
+            // set pf af necessary
+            if (value == 0) cpu.setFlag(Cpu.FLAG_ZF);
+        }
+
+        /**
+         * sets PF, SF and ZF flags based on the value provided (16 bit)
+         * @param cpu ref to cpu
+         * @param value value to test
+         */
+        public static void flagsPsz16(Cpu cpu, int value)
+        {
+            // value without carry and upper part
+            value &= Cpu.WORD_MASK;
+
+            int bitCount = Integer.bitCount(value);
+
+            /*
+            // quicker path ?
+            cpu.flags = (cpu.flags & ~Cpu.FLAG_PF) | ((bitCount & 0x1) << Cpu.FLAG_PF_POS);
+            //          (    clear SF            )   (    SIGN to SF position and clear other bits                  )
+            cpu.flags = (cpu.flags & ~Cpu.FLAG_SF) | ((value >> (Cpu.WORD_SIGN_POS - Cpu.FLAG_SF_POS)) & Cpu.FLAG_SF);
+            cpu.flags = (cpu.flags & ~Cpu.FLAG_ZF);
+            */
+
+            // quickest path
+            //          ( clear three flags at once)
+            cpu.flags = (cpu.flags & ~(Cpu.FLAG_PF | Cpu.FLAG_SF | Cpu.FLAG_ZF))
+                    // parity at PF position
+                    | ((bitCount & 0x1) << Cpu.FLAG_PF_POS)
+                    // sign at SF position
+                    | ((value >> (Cpu.WORD_POS_SIGN - Cpu.FLAG_SF_POS)) & Cpu.FLAG_SF);
+
+            // set pf af necessary
+            if (value == 0) cpu.setFlag(Cpu.FLAG_ZF);
+        }
+
+        /**
+         * sets PF, SF, ZF and CF flags based on the value provided (8 bit)
+         * @param cpu ref to cpu
+         * @param value value to test
+         */
+        public static void flagsPszc8(Cpu cpu, int value)
+        {
+            // value without carry and upper part
+            int bValue = value & Cpu.BYTE_MASK;
+            int bitCount = Integer.bitCount(bValue);
+
+            //          ( clear flags at once)
+            cpu.flags = (cpu.flags & ~(Cpu.FLAG_PF | Cpu.FLAG_SF | Cpu.FLAG_ZF | Cpu.FLAG_CF))
+                    // parity at PF position
+                    | ((bitCount & 0x1) << Cpu.FLAG_PF_POS)
+                    // sign at SF position
+                    | ((bValue >> (Cpu.BYTE_POS_SIGN - Cpu.FLAG_SF_POS)) & Cpu.FLAG_SF)
+                    // carry bit (ORIGINAL, not masked value here)
+                    | ((value >> Cpu.BYTE_POS_CARRY) & Cpu.FLAG_CF);
+
+
+            // set pf af necessary (MASKED value)
+            if (bValue == 0) cpu.setFlag(Cpu.FLAG_ZF);
+        }
+
+        /**
+         * sets PF, SF, ZF and CF flags based on the value provided (16 bit)
+         * @param cpu ref to cpu
+         * @param value value to test
+         */
+        public static void flagsPszc16(Cpu cpu, int value)
+        {
+            // value without carry and upper part
+            int wValue = value & Cpu.WORD_MASK;
+            int bitCount = Integer.bitCount(wValue);
+
+            //          ( clear flags at once)
+            cpu.flags = (cpu.flags & ~(Cpu.FLAG_PF | Cpu.FLAG_SF | Cpu.FLAG_ZF | Cpu.FLAG_CF))
+                    // parity at PF position
+                    | ((bitCount & 0x1) << Cpu.FLAG_PF_POS)
+                    // sign at SF position
+                    | ((wValue >> (Cpu.WORD_POS_SIGN - Cpu.FLAG_SF_POS)) & Cpu.FLAG_SF)
+                    // carry bit (ORIGINAL, not masked value here)
+                    | ((value >> Cpu.WORD_POS_CARRY) & Cpu.FLAG_CF);
+
+
+            // set pf af necessary (MASKED value)
+            if (wValue == 0) cpu.setFlag(Cpu.FLAG_ZF);
         }
 
     }
@@ -478,7 +977,7 @@ public class Cpu {
      * that follows the opcode, this provides a way to register several @{@link DemuxedOpcode}
      * under the same opcode and call them dynamically based on mod-reg-r/m byte
      */
-    public static abstract class RegBasedDemux extends Opcode {
+    public static class RegBasedDemux extends Opcode {
         /**
          * demuxed opcodes to be called
          */
@@ -525,525 +1024,361 @@ public class Cpu {
         public RegBasedDemux(Map<Integer, DemuxedOpcode> _exits)
         {
             exits = new DemuxedOpcode[8];
-            try {
-                _exits.forEach((reg, op) -> exits[reg] = op);
-            } catch (Exception e) {
-                throw new IllegalArgumentException("reg part of mod-reg-r/m byte is 3 bits in size, must have 000..111 value", e);
-            }
+            add(_exits);
+        }
+
+        /**
+         * update collection of exits
+         * @param _exits additional exits
+         */
+        public void add(Map<Integer, DemuxedOpcode> _exits)
+        {
+            _exits.forEach((reg, op) ->
+            {
+                if ((reg < 0) || (7 < reg)) {
+                    throw new IllegalArgumentException("reg part of mod-reg-r/m byte is 3 bits in size, must have 000..111 value");
+                }
+                if (exits[reg] != null) {
+                    throw new IllegalArgumentException("reg part of mod-reg-r/m byte must be unique, \"" + reg + "\" is duplicate");
+                }
+                exits[reg] = op;
+            });
         }
 
         @Override
         public void execute(Cpu cpu, int opcode)
         {
-            cpu.readAndProcessModRegRm(opcode);
+            cpu.readModRegRm(opcode);
             exits[cpu.mrrReg].demuxed(cpu, opcode);
         }
     }
 
-    // Additions: ADD ADC INC AAA DAA
-    // opcodes: [p4-23],  flags: [p2-35]
-    // ADD (af,cf,of,pf,sf,zf)
-    //    Reg/mem with reg to either  000000dw mrr   disp     disp
-    //    imm to reg/mem              100000sw m000r disp     disp    data   data(if s:w=01)
-    //    imm to accum                0000010w data  data(w=1)
-    // ADS (the same as ADD, but codes)
-    //                                000100dw --"--
-    //      --"--                     100000sw m010r --"--
-    //                                0001010w --"--
-    // INC (af,of,pf,sf,zf   not cf)
-    //    reg/mem                     1111111w m000r disp     disp
-    //    reg                         01000reg
-    //
-    // AAA (af, cf) others=undef      00110111
-    // DAA (af,cf,pf,sf,zf. of=undef) 00100111
-    public static class AddRmR extends Opcode {
+    /**
+     * interface to simplify registration of opcodes and
+     * automatic checks for intersections and incorrect config/registration
+     */
+    public interface OpcodeConfiguration {
+        /**
+         * provides configuration for some opcodes,
+         * Map<String, [Class<? extends Opcode> | Map<String, Class<? extends DemuxedOpcode>]>
+         * keys can contain '01*_' characters where:
+         * 0|1 - zero or one in the appropriate position of key
+         * _   - divider, will be ignored
+         * *   - template, will be substituted with 0 and 1
+         *
+         * @return map with configuration
+         */
+        Map<String, ?> getConfiguration();
 
-        public static void flags(Cpu cpu, boolean w, int value1, int value2)
+        /**
+         * dumps registered opcodes to stdout for visual check and debug
+         * @param registry populated registry
+         */
+        static void dump(Opcode[] registry)
         {
-            int zmask, cmask, smask, wValue, value;
+            char[] binOpcode = new char[8];
+            Arrays.fill(binOpcode, '0');
 
-            if (w) {
-                zmask = Cpu.WORD_MASK_Z;
-                cmask = Cpu.WORD_MASK_C;
-                smask = Cpu.WORD_MASK_S;
-            } else {
-                zmask = Cpu.BYTE_MASK_Z;
-                cmask = Cpu.BYTE_MASK_C;
-                smask = Cpu.BYTE_MASK_S;
-            }
+            Formatter formatter = new Formatter(System.out);
+            for (int i = 0; i < registry.length; i++) {
+                Opcode opcode = registry[i];
 
-            value = value1 + value2;
-            // value without carry
-            wValue = value & zmask;
+                StringBuilder text = new StringBuilder();
+                text.append(binOpcode[0]).append(binOpcode[1]).append(binOpcode[2]).append(binOpcode[3]).append('_').
+                        append(binOpcode[4]).append(binOpcode[5]).append(binOpcode[6]).append(binOpcode[7]);
 
-            // (af,cf,of,pf,sf,zf)
-
-            int bitCount = Integer.bitCount(wValue & Cpu.BYTE_MASK_Z);
-            if ((bitCount & 0x1) == 0) cpu.setFlag(Cpu.FLAG_PF); else cpu.resetFlag(Cpu.FLAG_PF);
-            if ((value & cmask) != 0)  cpu.setFlag(Cpu.FLAG_CF); else cpu.resetFlag(Cpu.FLAG_CF);
-            if ((wValue & smask) != 0) cpu.setFlag(Cpu.FLAG_SF); else cpu.resetFlag(Cpu.FLAG_SF);
-            if ((wValue & zmask) == 0) cpu.setFlag(Cpu.FLAG_ZF); else cpu.resetFlag(Cpu.FLAG_ZF);
-
-            if ( ((value1 & smask) == (value2 & smask)) &&
-                    ((value1 & smask) != (value & smask)) )
-                cpu.setFlag(Cpu.FLAG_OF);
-            else
-                cpu.resetFlag(Cpu.FLAG_OF);
-
-            // AF only base on lower nipple of low byte
-            if (0x0F < ((value1 & 0x0F) + (value2 & 0x0F)))
-                cpu.setFlag(Cpu.FLAG_AF);
-            else
-                cpu.resetFlag(Cpu.FLAG_AF);
-        }
-
-        @Override
-        public void execute(Cpu cpu, int opcode)
-        {
-            cpu.readAndProcessModRegRm(opcode);
-            boolean w = (opcode & 0b0000_0001) == 0b01;
-            boolean d = (opcode & 0b0000_0010) == 0b10;
-
-            int sum = cpu.mrrRegValue + cpu.mrrModValue;
-            flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
-            
-            if (d) {
-                // reg <<- mor r/m
-                Opcode.writeRegister(cpu, w, cpu.mrrRegIndex, sum);
-            }
-            else {
-                // mod r/m <<- reg
-                if ((cpu.mrrMod ^ 0b11) == 0) {
-                    // mod r/m is a register
-                    Opcode.writeRegister(cpu, w, cpu.mrrModRegIndex, sum);
-                } else {
-                    // mod r/m is memory
-                    if (w) {
-                        cpu.mem16(cpu.mrrModEA, sum & 0xFFFF);
-                    } else {
-                        cpu.mem8( cpu.mrrModEA, sum & 0x00FF);
+                if (opcode == null) {
+                    text.append("    ----\n");
+                }
+                else if (opcode instanceof RegBasedDemux)
+                {
+                    RegBasedDemux dmx = (RegBasedDemux) opcode;
+                    text.append("    ").append("REG DEMUX\n");
+                    for (int e = 0; e < dmx.exits.length; e++) {
+                        text.append("         ");
+                        if (dmx.exits[e] == null) {
+                            text.append("    ---");
+                        } else {
+                            String value = Integer.toUnsignedString(e, 2);
+                            text.append("    ");
+                            for (int k = 0; k < 3 - value.length(); k++) {
+                                text.append('0');
+                            }
+                            text.append(value).append("    ").append(dmx.exits[e].getClass().getSimpleName());
+                        }
+                        text.append("\n");
                     }
                 }
+                else {
+                    text.append("    ").append(opcode.getClass().getSimpleName()).append("\n");
+                }
+                System.out.print(text.toString());
+
+                // inc binary representation
+                int idx = 7;
+                while (0 <= idx) {
+                    if (binOpcode[idx] == '1') {
+                        binOpcode[idx] = '0';
+                        idx--;
+                    } else {
+                        binOpcode[idx] = '1';
+                        break;
+                    }
+                }
+            }
+        }
+
+
+        /**
+         * applies configuration template to the registry of opcodes to be used for execution,
+         * @param registry target registry to populate with opcodes
+         * @param configuration another part of configuration to insert into registry,
+         *                      must be Map<String, [Class<? extends Opcode> | Map<String, Class<? extends DemuxedOpcode>]>
+         */
+        static void apply(Opcode[] registry, Map<String, ?> configuration)
+        {
+            // cache of opcode instances to not create duplicate in case
+            // when single Opcode class handles a variety of cpu opcodes
+            Map<Class<? extends  Opcode>, Opcode> instances = new HashMap<>();
+
+            configuration.forEach((template, impl) ->
+            {
+                if (impl instanceof Map) {
+                    // that must be <String, DemuxedOpcode>,
+                    // bu we can't be sure
+                    Map<?, ?> map = (Map<?, ?>) impl;
+                    apply(instances, registry, template, map);
+                }
+                else if (impl instanceof Class)
+                {
+                    if (!Opcode.class.isAssignableFrom((Class)impl)) {
+                        throw new IllegalArgumentException("configuration \"" + template + "\" doesn't extend Opcode class");
+                    }
+                    Class<Opcode> x = (Class<Opcode>)impl;
+                    apply(instances, registry, template, x);
+                } else {
+                    throw new IllegalArgumentException("configuration \"" + template + "\" has incorrect class: " + impl.getClass().getName());
+                }
+            });
+        }
+
+        /**
+         * applies configuration template to the registry of opcodes to be used for execution,
+         * handles Map<String, Class<? extends Opcode> case
+         *
+         * @param instances cache of Opcode instance to reuse
+         * @param registry target registry to populate with opcodes
+         * @param opTemplate template of an operation (8 bits)
+         * @param opClass class of the Opcode to use
+         */
+        private static void apply(
+                Map<Class<? extends  Opcode>, Opcode> instances,
+                Opcode[] registry, String opTemplate, Class<? extends Opcode> opClass)
+        {
+            if (DemuxedOpcode.class.isAssignableFrom(opClass)) {
+                throw new IllegalArgumentException("DemuxedOpcode is used instead of Opcode [" + opTemplate + "]");
+            }
+            String[] opcodes = extend(opTemplate);
+            for (String opcode: opcodes) {
+                int iOpcode = Integer.valueOf(opcode, 2);
+                if (registry[iOpcode] != null) {
+                    throw new IllegalArgumentException("attempt of duplicate register of an opcode, template:" +
+                            opTemplate + "  opcode:" + opcode + " (already registered)");
+                }
+                try {
+                    Opcode instance = instances.get(opClass);
+                    if (instance == null) {
+                        instance = opClass.getDeclaredConstructor().newInstance();
+                        instances.put(opClass, instance);
+                    }
+                    registry[iOpcode] = instance;
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("error creating instance of " + opClass, e);
+                }
+            }
+        }
+
+        /**
+         * applies configuration template to the registry of opcodes to be used for execution,
+         * handles Map<String, Class<? extends DemuxedOpcode>> case
+         *
+         * @param instances cache of Opcode instance to reuse
+         * @param registry target registry to populate with opcodes
+         * @param opTemplate template of an operation (8 bits)
+         * @param exitsTemplate template of demuxed opcodes (reg part)
+         */
+        private static void apply(
+                Map<Class<? extends  Opcode>, Opcode> instances,
+                Opcode[] registry, String opTemplate, Map<?, ?> exitsTemplate)
+        {
+            // extend exits map
+            Map<Integer, DemuxedOpcode> exits = new HashMap<>();
+            exitsTemplate.forEach((tmpl, clazz) ->
+            {
+                if (!(tmpl instanceof String)) {
+                    throw new IllegalArgumentException("keys in demuxed opcodes must be strings");
+                }
+                if (!(clazz instanceof Class) || !DemuxedOpcode.class.isAssignableFrom((Class)clazz)) {
+                    throw new IllegalArgumentException("demux opcode must extend DemuxedOpcode, opcode:" +
+                            opTemplate + " class:" + clazz.getClass().getName());
+                }
+
+                // extend reg to be used for registration
+                String[] regs = extend((String) tmpl);
+                for (String reg: regs)
+                {
+                    try {
+                        Class<DemuxedOpcode> opClass = (Class<DemuxedOpcode>)clazz;
+                        DemuxedOpcode instance = (DemuxedOpcode) instances.get(clazz);
+                        if (instance == null) {
+                            instance = opClass.getDeclaredConstructor().newInstance();
+                            instances.put(opClass, instance);
+                        }
+
+                        Integer iReg = Integer.valueOf(reg, 2);
+                        if (exits.containsKey(iReg)) {
+                            throw new IllegalArgumentException("duplicate registration of DemuxedOpcode, opcode:" +
+                                    opTemplate + " reg:" + reg + " (already registered)");
+                        }
+                        exits.put(iReg, instance);
+                    } catch (Exception e) {
+                        throw new IllegalArgumentException("error creating instance of " + clazz, e);
+                    }
+                }
+            });
+
+            // extend main opcode and register all variants
+            String[] opcodes = extend(opTemplate);
+            for (String opcode: opcodes)
+            {
+                int iOpcode = Integer.valueOf(opcode, 2);
+                if ((registry[iOpcode] != null) && !(registry[iOpcode] instanceof RegBasedDemux)) {
+                    throw new IllegalArgumentException("duplicate registration of Opcode/DemuxedOpcode, template: " +
+                            opTemplate + " opcode:" + opcode + "   exists:" + registry[iOpcode].getClass().getName());
+                }
+                if (registry[iOpcode] == null) {
+                    registry[iOpcode] = new RegBasedDemux(exits);
+                } else {
+                    ((RegBasedDemux)registry[iOpcode]).add(exits);
+                }
+            }
+        }
+
+        /**
+         * extends template into array of possible variants, replacing
+         * "*" symbols with 0 and 1, removing service symbol "_"
+         * @param template template with "01*_" symbols
+         * @return array of possible variants
+         */
+        static String[] extend(String template)
+        {
+            int positions = 0;
+            int asterisks = 0;
+            for (int i = 0; i < template.length(); i++)
+            {
+                int c = template.charAt(i);
+                if ("01*_".indexOf(c) == -1) {
+                    throw new IllegalArgumentException("incorrect configuration \"" + template + "\", must contain only \"01*_\" symbols");
+                }
+                if ("01*".indexOf(c) != -1) {
+                    positions++;
+                }
+                if (c == '*') {
+                    asterisks++;
+                }
+            }
+            if ((positions != 3) && (positions != 8)) {
+                throw new IllegalArgumentException("incorrect configuration \"" + template + "\", must contain 3 or 8 positions");
+            }
+
+            // current state of the template
+            char[] state = new char[positions];
+            // positions of asterisk symbols in the compact template
+            int[] aPositions = new int[asterisks];
+            int aIndex = 0;
+            int sIndex = 0;
+            for (int i = 0; i < template.length(); i++)
+            {
+                char c = template.charAt(i);
+                if ("01*".indexOf(c) == -1) {
+                    continue;
+                }
+                if (c == '*') {
+                    aPositions[aIndex++] = sIndex;
+                }
+                state[sIndex++] = c;
+            }
+
+            String[] result = new String[1 << asterisks];
+            if (asterisks == 0) {
+                result[0] = new String(state);
+            } else {
+                extend(result, 0, state, aPositions, 0);
+            }
+
+            return result;
+        }
+
+        /**
+         * recursively extends template into array of variants
+         * @param result result array to populate
+         * @param resultIdx index of the next position in result to populate
+         * @param state current state of the template, updated in process
+         * @param aPositions positions af asterisks in the state
+         * @param aIdx index of asterisk to process
+         * @return number of generated elements in the result array
+         */
+        private static int extend(String[] result, int resultIdx, char[] state, int[] aPositions, int aIdx)
+        {
+            if (aIdx < aPositions.length - 1)
+            {
+                // intermediate asterisk, use recursion
+                state[aPositions[aIdx]] = '0';
+                int updates = extend(result, resultIdx, state, aPositions, aIdx + 1);
+
+                state[aPositions[aIdx]] = '1';
+                updates = extend(result, resultIdx + updates, state, aPositions, aIdx + 1);
+
+                return updates * 2;
+            } else {
+                // last asterisk, add all variants
+                state[aPositions[aIdx]] = '0';
+                result[resultIdx] = new String(state);
+                state[aPositions[aIdx]] = '1';
+                result[resultIdx + 1] = new String(state);
+                return 2;
             }
         }
     }
 
 
-    // SUB,
-    // SUB (af,cf,of,pf,sf,zf)
-    //    Reg/mem and reg to either   001010dw mrr   disp     disp
-    //    imm from reg/mem            100000sw m101r disp     disp    data   data(if s:w=01)
-    //    imm from accum              0010110w data  data(w=1)
-    // SBB (af,cf,of,pf,sf,zf)  dst = dst - src - cf, ds
-    //    Reg/mem and reg to either   000110dw mrr   disp     disp
-    //    imm from reg/mem            100000sw m011r disp     disp    data   data(if s:w=01)
-    //    imm from accum              0001110w data  data(w=1)
-    // DEC (af,of,pf,sf,zf  not cf)
-    //    reg/mem                     1111111w m001r disp     disp
-    //    reg                         01001reg
-    // NEG (af,cf,of,pf,sf,zf) dst <- 0-dst,   0->0,  -128->-128 OF, -32768->-32768 OF, CF always except dst==0 - reset CF
-    //    change sign                 1111011w m011r disp     disp
-    public static class Sub
+    /**
+     * @return string representation of registers
+     */
+    public String dump() {
+        return String.format("@%04X  R: %04X  %04X  %04X  %04X - %04X  %04X  %04X  %04X     %s",
+                ip,
+                registers[0], registers[1], registers[2], registers[3],
+                registers[4], registers[5], registers[6], registers[7],
+                dumpFlag());
+    }
+
+    /**
+     * @return string state of flag register
+     */
+    public String dumpFlag()
     {
-        public static void flags(Cpu cpu, boolean w, int dst, int src)
-        {
-            int zmask, cmask, smask, wValue, value;
-
-            if (w) {
-                zmask = Cpu.WORD_MASK_Z;
-                cmask = Cpu.WORD_MASK_C;
-                smask = Cpu.WORD_MASK_S;
-            } else {
-                zmask = Cpu.BYTE_MASK_Z;
-                cmask = Cpu.BYTE_MASK_C;
-                smask = Cpu.BYTE_MASK_S;
-            }
-
-            value = dst - src;
-
-            // value without carry
-            wValue = value & zmask;
-
-            // (af,cf,of,pf,sf,zf)
-            int bitCount = Integer.bitCount(wValue & Cpu.BYTE_MASK_Z);
-            if ((bitCount & 0x1) == 0) cpu.setFlag(Cpu.FLAG_PF); else cpu.resetFlag(Cpu.FLAG_PF);
-            if ((value & cmask) != 0)  cpu.setFlag(Cpu.FLAG_CF); else cpu.resetFlag(Cpu.FLAG_CF);
-            if ((wValue & smask) != 0) cpu.setFlag(Cpu.FLAG_SF); else cpu.resetFlag(Cpu.FLAG_SF);
-            if ((wValue & zmask) == 0) cpu.setFlag(Cpu.FLAG_ZF); else cpu.resetFlag(Cpu.FLAG_ZF);
-
-            // this is sub specific
-            if ( ((dst & smask) != (src & smask)) &&
-                    ((dst & smask) != (value & smask)) )
-                cpu.setFlag(Cpu.FLAG_OF);
-            else
-                cpu.resetFlag(Cpu.FLAG_OF);
-
-
-            // AF only base on lower nipple of low byte,
-            // check for borrow from the high nibble
-            // todo: check for 8|4 bit nibble (here=8 and add=4)
-            if ((dst & 0xFF) < (src & 0xFF))
-                cpu.setFlag(Cpu.FLAG_AF);
-            else
-                cpu.resetFlag(Cpu.FLAG_AF);
-        }
-
-        public static class SubRmR extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                cpu.readAndProcessModRegRm(opcode);
-                boolean w = (opcode & 0b0000_0001) == 0b01;
-                boolean d = (opcode & 0b0000_0010) == 0b10;
-
-                if (d) {
-                    // reg <<- mor r/m
-                    int delta = cpu.mrrRegValue + cpu.mrrModValue;
-                    Sub.flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
-                    Opcode.writeRegister(cpu, w, cpu.mrrRegIndex, delta);
-                }
-                else {
-                    // mod r/m <<- reg
-                    int delta = cpu.mrrModValue - cpu.mrrRegValue;
-                    Sub.flags(cpu, w, cpu.mrrModValue, cpu.mrrRegValue);
-                    if ((cpu.mrrMod ^ 0b11) == 0) {
-                        // mod r/m is a register
-                        Opcode.writeRegister(cpu, w, cpu.mrrModRegIndex, delta);
-                    } else {
-                        // mod r/m is memory
-                        if (w) {
-                            cpu.mem16(cpu.mrrModEA, delta & 0xFFFF);
-                        } else {
-                            cpu.mem8( cpu.mrrModEA, delta & 0x00FF);
-                        }
-                    }
-                }
-            }
-        }
-
-        //    imm from reg/mem            100000sw m101r disp     disp    data   data(if s:w=01)
-        public static class SubRmImm extends Opcode {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                cpu.readAndProcessModRegRm(opcode);
-                boolean w       = (opcode & 0b0000_0001) == 0b01;
-                boolean imm16   = (opcode & 0b0000_0011) == 0b01;
-
-                // extract immediate value,
-                // size depends on s:w==0:1 bits
-                int imm;
-                if (imm16) {
-                    imm = cpu.read16();
-                } else {
-                    imm = cpu.read8();
-                }
-
-                // mod r/m <<- imm
-                Sub.flags(cpu, w, cpu.mrrModValue, imm);
-                int delta = cpu.mrrModValue - imm;
-
-                if ((cpu.mrrMod ^ 0b11) == 0) {
-                    // mod r/m is a register
-                    Opcode.writeRegister(cpu, w, cpu.mrrModRegIndex, delta);
-                } else {
-                    // mod r/m is memory
-                    if (w) {
-                        cpu.mem16(cpu.mrrModEA, delta & 0xFFFF);
-                    } else {
-                        cpu.mem8( cpu.mrrModEA, delta & 0x00FF);
-                    }
-                }
-            }
-        }
-
-        //    imm from accum              0010110w data  data(w=1)   [(ax|al) - imm]
-        public static class SubAccImm extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode) {
-                boolean w       = (opcode & 0b0000_0001) == 0b01;
-
-                // accumulator
-                int ax = cpu.registers[Cpu.AX];
-
-                // extract immediate value,
-                // size depends on w bit
-                int imm;
-                if (w) {
-                    imm = cpu.read16();
-                } else {
-                    imm = cpu.read8();
-                    // use only AL part
-                    ax &= 0x000F;
-                }
-
-                Sub.flags(cpu, w, ax, imm);
-
-                int delta = ax - imm;
-                Opcode.writeRegister(cpu, w, Cpu.AX, delta);
-            }
-        }
-    }
-
-    // CMP
-    //    Reg/mem and reg       001110dw mrr    disp disp
-    //    Imm with reg/mem      100000sw m111r  disp disp data data(s:w=01)
-    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
-    //
-    public static class Cmp {
-
-        public static class CmpRmR extends Opcode
-        {
-            public void execute(Cpu cpu, int opcode)
-            {
-                cpu.readAndProcessModRegRm(opcode);
-                boolean w = (opcode & 0b0000_0001) == 1;
-                boolean d = (opcode & 0b0000_0010) == 0b10;
-
-                if (d) {
-                    // reg <<- mor r/m
-                    Sub.flags(cpu, w, cpu.mrrRegValue, cpu.mrrModRegValue);
-                } else {
-                    // mod r/m <<- reg
-                    Sub.flags(cpu, w, cpu.mrrModRegValue, cpu.mrrRegValue);
-                }
-
-/*
-            boolean eq;
-            if ((cpu.mrrMod ^ 0b11) == 0) {
-                // cmp mrrReg ~ mrrModReg
-                if (w) {
-                    eq = cpu.mrrRegValue == cpu.mrrModRegValue;
-                } else {
-                    if ((cpu.mrrRm & 0b100) == 0) {
-                        eq = (cpu.mrrRegValue & 0xFF) == (cpu.mrrModRegValue & 0xFF);
-                    } else {
-                        eq = (cpu.mrrRegValue & 0xFF00) == (cpu.mrrModRegValue & 0xFF00);
-                    }
-                }
-            } else {
-                // cmp regIdx ~ ea
-                if (w) {
-                    eq = cpu.registers[cpu.mrrRegIndex] == cpu.mem16(cpu.mrrModEA);
-                } else {
-                    if ((cpu.mrrRm & 0b100) == 0) {
-                        eq = (cpu.registers[cpu.mrrRegIndex] & 0xFF) == cpu.mem8(cpu.mrrModEA);
-                    } else {
-                        eq = (cpu.registers[cpu.mrrRegIndex] >> 8) == cpu.mem8(cpu.mrrModEA);
-                    }
-                }
-            }
-*/
-            }
-        }
-
-
-        //    Imm with reg/mem      100000sw m111r  disp disp data data(s:w=01)
-        public static class CmpRmImm extends Opcode
-        {
-            public void execute(Cpu cpu, int opcode)
-            {
-                cpu.readAndProcessModRegRm(opcode);
-                boolean w       = (opcode & 0b0000_0001) == 1;
-                boolean imm16   = (opcode & 0b0000_0011) == 0b01;
-
-                // extract immediate value,
-                // size depends on s:w==0:1 bits
-                int imm;
-                if (imm16) {
-                    imm = cpu.read16();
-                } else {
-                    imm = cpu.read8();
-                }
-
-                Sub.flags(cpu, w, cpu.mrrModValue, imm);
-            }
-        }
-
-
-        //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
-        public static class CmpAccImm extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                boolean w = (opcode & 0b0000_0001) == 1;
-
-                // accumulator
-                int ax = cpu.registers[Cpu.AX];
-
-                // extract immediate value,
-                // size depends on w bit
-                int imm;
-                if (w) {
-                    imm = cpu.read16();
-                } else {
-                    imm = cpu.read8();
-                    // use only AL part
-                    ax &= 0x000F;
-                }
-
-                Sub.flags(cpu, w, ax, imm);
-            }
-        }
-    }
-
-
-    public static class JeJz extends Opcode {
-        @Override
-        public void execute(Cpu cpu, int opcode)
-        {
-            int unsigned = cpu.read8();
-            if ((cpu.flags & FLAG_ZF) != 0) {
-                // use as signed
-                cpu.ip += (byte)unsigned;
-            }
-        }
-    }
-
-
-    public static class Mov {
-        // reg/mem to/from reg      100010dw  mrr       disp    disp
-        // imm to reg/mem           1100011w  m000r     disp    disp data data(w=1)
-        // imm to reg               1011wreg  data      data(w=1)
-        // mem to accumulator       1010000w  addr.low  addr.hi
-        // accumulator to memory    1010001w  addr.low  addr.hi
-        // reg/mem to seg reg       10001110  m0SRr     disp    disp
-        // seg reg to reg/mem       10001100  m0SRr     disp    disp
-
-        public static class MovRmR extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                cpu.readAndProcessModRegRm(opcode);
-                boolean w = (opcode & 0b0000_0001) == 0b01;
-                boolean d = (opcode & 0b0000_0010) == 0b10;
-
-                if (d) {
-                    // reg <<- mor r/m
-                    Opcode.writeRegister(cpu, w, cpu.mrrRegIndex, cpu.mrrModValue);
-                }
-                else {
-                    // mod r/m <<- reg
-                    if ((cpu.mrrMod ^ 0b11) == 0) {
-                        // mod r/m is a register
-                        Opcode.writeRegister(cpu, w, cpu.mrrModRegIndex, cpu.mrrRegValue);
-                    } else {
-                        // mod r/m is memory
-                        if (w) {
-                            cpu.mem16(cpu.mrrModEA, cpu.mrrRegValue);
-                        } else {
-                            cpu.mem8( cpu.mrrModEA, cpu.mrrRegValue);
-                        }
-                    }
-                }
-            }
-        }
-
-        public static class MovRmImm extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                cpu.readAndProcessModRegRm(opcode);
-                boolean w = (opcode & 0b0000_0001) == 0b01;
-
-                int imm;
-                if (w) {
-                    imm = cpu.read16();
-                } else {
-                    imm = cpu.read8();
-                }
-
-                // mod r/m <<- imm
-                if ((cpu.mrrMod ^ 0b11) == 0) {
-                    // mod r/m is a register
-                    Opcode.writeRegister(cpu, w, cpu.mrrModRegIndex, imm);
-                } else {
-                    // mod r/m is memory
-                    if (w) {
-                        cpu.mem16(cpu.mrrModEA, imm);
-                    } else {
-                        cpu.mem8( cpu.mrrModEA, imm);
-                    }
-                }
-            }
-        }
-
-        public static class MovRegImm extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                boolean w = (opcode & 0b0000_1000) != 0b0000;
-                int regIndex = opcode & 0b0111;
-
-                int imm;
-                if (w) {
-                    imm = cpu.read16();
-                } else {
-                    imm = cpu.read8();
-                }
-
-                Opcode.writeRegister(cpu, w, regIndex, imm);
-            }
-        }
-
-        public static class MovMemAcc extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                boolean w = (opcode & 0b0000_0001) != 0b0000;
-                // here 'd' is not standard 'd', but:
-                // 0 - mem to acc
-                // 1 - acc to mem
-                boolean d = (opcode & 0b0000_0010) != 0b0000;
-
-                cpu.readDisplacement();
-
-                if (d) {
-                    if (w) {
-                        cpu.mem16(cpu.displacement, cpu.registers[Cpu.AX]);
-                    } else {
-                        cpu.mem8(cpu.displacement, cpu.registers[Cpu.AX]);
-                    }
-                } else {
-                    // just read 16, write will handle it based on 'w'
-                    int eaValue = cpu.mem16(cpu.displacement);
-                    Opcode.writeRegister(cpu, w, Cpu.AX, eaValue);
-                }
-            }
-        }
-
-        public static class MovRmSR extends Opcode
-        {
-            @Override
-            public void execute(Cpu cpu, int opcode)
-            {
-                // here 'd' is not standard 'd', but:
-                // 0 - segment reg to r/m
-                // 1 - r/m to segment reg
-                boolean d = (opcode & 0b0000_0010) != 0b0000;
-
-                cpu.readAndProcessModRegRm(opcode);
-
-                if (d) {
-                    Opcode.writeSegment(cpu, cpu.mrrReg, cpu.mrrModValue);
-                } else {
-                    // mod r/m <<- seg
-                    if ((cpu.mrrMod ^ 0b11) == 0) {
-                        // mod r/m is a register
-                        Opcode.writeRegister(cpu, true, cpu.mrrModRegIndex, cpu.segments[cpu.mrrReg]);
-                    } else {
-                        // mod r/m is memory
-                        cpu.mem16(cpu.mrrModEA, cpu.segments[cpu.mrrReg]);
-                    }
-                }
-            }
-        }
+        char[] tmp = new char[] {
+                ((flags & FLAG_OF) == 0) ? '.' : 'O',
+                ((flags & FLAG_DF) == 0) ? '.' : 'D',
+                ((flags & FLAG_IF) == 0) ? '.' : 'I',
+                ((flags & FLAG_TF) == 0) ? '.' : 'T',
+                '-',
+                ((flags & FLAG_SF) == 0) ? '.' : 'S',
+                ((flags & FLAG_ZF) == 0) ? '.' : 'Z',
+                ((flags & FLAG_AF) == 0) ? '.' : 'A',
+                ((flags & FLAG_PF) == 0) ? '.' : 'P',
+                ((flags & FLAG_CF) == 0) ? '.' : 'C'};
+        return new String(tmp);
     }
 }
