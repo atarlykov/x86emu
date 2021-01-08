@@ -57,15 +57,15 @@ public class Sub implements Cpu.OpcodeConfiguration
      * @param word word (true) or byte(false) mode
      * @param dst dst operand
      * @param src src operand
+     * @return (dst - src) used during flags calculation
      */
-    public static void flags(Cpu cpu, boolean word, int dst, int src)
+    public static int flags(Cpu cpu, boolean word, int dst, int src)
     {
         int value = dst - src;
 
-        if (word) {
-            int wValue = value & Cpu.WORD_MASK;
-
-            Cpu.Opcode.flagsPszc16(cpu, wValue);
+        if (word)
+        {
+            Cpu.Opcode.flagsPszc16(cpu, value);
 
             // this is sub specific
             // todo: optimize
@@ -77,9 +77,7 @@ public class Sub implements Cpu.OpcodeConfiguration
 
         }
         else {
-            int wValue = value & Cpu.BYTE_MASK;
-
-            Cpu.Opcode.flagsPszc8(cpu, wValue);
+            Cpu.Opcode.flagsPszc8(cpu, value);
 
             // this is sub specific
             if (((dst & Cpu.BYTE_MASK_SIGN) != (src & Cpu.BYTE_MASK_SIGN)) &&
@@ -96,27 +94,28 @@ public class Sub implements Cpu.OpcodeConfiguration
             cpu.setFlag(Cpu.FLAG_AF);
         else
             cpu.resetFlag(Cpu.FLAG_AF);
+
+        return value;
     }
 
     /**
      * sets cpu flags based on the result of (dst <- dst - src) operation
      * not touching the CF flag (for DEC opcode)
      * NOTE: direct copy of {@link #flags} without CF assignment
-     * todo: use {@link Cpu.Opcode#flagsPsz(Cpu, boolean, int)}
      *
      * @param cpu ref to cpu
      * @param word word (true) or byte(false) mode
      * @param dst dst operand
      * @param src src operand
+     * @return (dst - src) used during flags calculation
      */
-    public static void flagsNoCF(Cpu cpu, boolean word, int dst, int src)
+    public static int flagsNoCF(Cpu cpu, boolean word, int dst, int src)
     {
         int value = dst - src;
 
-        if (word) {
-            int wValue = value & Cpu.WORD_MASK;
-
-            Cpu.Opcode.flagsPsz16(cpu, wValue);
+        if (word)
+        {
+            Cpu.Opcode.flagsPsz16(cpu, value);
 
             // this is sub specific
             // todo: optimize
@@ -125,12 +124,9 @@ public class Sub implements Cpu.OpcodeConfiguration
                 cpu.setFlag(Cpu.FLAG_OF);
             else
                 cpu.resetFlag(Cpu.FLAG_OF);
-
         }
         else {
-            int wValue = value & Cpu.BYTE_MASK;
-
-            Cpu.Opcode.flagsPsz8(cpu, wValue);
+            Cpu.Opcode.flagsPsz8(cpu, value);
 
             // this is sub specific
             if (((dst & Cpu.BYTE_MASK_SIGN) != (src & Cpu.BYTE_MASK_SIGN)) &&
@@ -147,6 +143,8 @@ public class Sub implements Cpu.OpcodeConfiguration
             cpu.setFlag(Cpu.FLAG_AF);
         else
             cpu.resetFlag(Cpu.FLAG_AF);
+
+        return value;
     }
 
     /**
@@ -161,13 +159,11 @@ public class Sub implements Cpu.OpcodeConfiguration
 
             if (d) {
                 // reg <<- mor r/m
-                int delta = cpu.mrrRegValue - cpu.mrrModValue;
-                Sub.flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
+                int delta = Sub.flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
                 cpu.writeRegister(w, cpu.mrrRegIndex, delta);
             } else {
                 // mod r/m <<- reg
-                int delta = cpu.mrrModValue - cpu.mrrRegValue;
-                Sub.flags(cpu, w, cpu.mrrModValue, cpu.mrrRegValue);
+                int delta = Sub.flags(cpu, w, cpu.mrrModValue, cpu.mrrRegValue);
                 cpu.writeByModRegRm(true, delta);
             }
         }
@@ -193,8 +189,7 @@ public class Sub implements Cpu.OpcodeConfiguration
             }
 
             // mod r/m <<- imm
-            Sub.flags(cpu, w, cpu.mrrModValue, imm);
-            int delta = cpu.mrrModValue - imm;
+            int delta = Sub.flags(cpu, w, cpu.mrrModValue, imm);
 
             cpu.writeByModRegRm(true, delta);
         }
@@ -223,9 +218,7 @@ public class Sub implements Cpu.OpcodeConfiguration
                 ax &= 0x000F;
             }
 
-            Sub.flags(cpu, w, ax, imm);
-
-            int delta = ax - imm;
+            int delta = Sub.flags(cpu, w, ax, imm);
             cpu.writeRegister(w, Cpu.AX, delta);
         }
     }
@@ -243,23 +236,19 @@ public class Sub implements Cpu.OpcodeConfiguration
 
             if (d) {
                 // reg <<- mor r/m
-                int delta = cpu.mrrRegValue - cpu.mrrModValue;
-                Sub.flagsNoCF(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
+                int delta = Sub.flagsNoCF(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
 
                 if ((cpu.flags & Cpu.FLAG_CF) != 0) {
-                    Sub.flags(cpu, w, delta, 1);
-                    delta -= 1;
+                    delta = Sub.flags(cpu, w, delta, 1);
                 }
 
                 cpu.writeRegister(w, cpu.mrrRegIndex, delta);
             } else {
                 // mod r/m <<- reg
-                int delta = cpu.mrrModValue - cpu.mrrRegValue;
-                Sub.flagsNoCF(cpu, w, cpu.mrrModValue, cpu.mrrRegValue);
+                int delta = Sub.flagsNoCF(cpu, w, cpu.mrrModValue, cpu.mrrRegValue);
 
                 if ((cpu.flags & Cpu.FLAG_CF) != 0) {
-                    Sub.flags(cpu, w, delta, 1);
-                    delta -= 1;
+                    delta = Sub.flags(cpu, w, delta, 1);
                 }
 
                 cpu.writeByModRegRm(true, delta);
@@ -287,12 +276,10 @@ public class Sub implements Cpu.OpcodeConfiguration
             }
 
             // mod r/m <<- imm
-            Sub.flagsNoCF(cpu, w, cpu.mrrModValue, imm);
-            int delta = cpu.mrrModValue - imm;
+            int delta = Sub.flagsNoCF(cpu, w, cpu.mrrModValue, imm);
 
             if ((cpu.flags & Cpu.FLAG_CF) != 0) {
-                Sub.flags(cpu, w, delta, 1);
-                delta -= 1;
+                delta = Sub.flags(cpu, w, delta, 1);
             }
 
             cpu.writeByModRegRm(true, delta);
@@ -322,12 +309,11 @@ public class Sub implements Cpu.OpcodeConfiguration
                 ax &= 0x000F;
             }
 
-            Sub.flagsNoCF(cpu, w, ax, imm);
-            int delta = ax - imm;
+
+            int delta = Sub.flagsNoCF(cpu, w, ax, imm);
 
             if ((cpu.flags & Cpu.FLAG_CF) != 0) {
-                Sub.flags(cpu, w, delta, 1);
-                delta -= 1;
+                delta = Sub.flags(cpu, w, delta, 1);
             }
 
             cpu.writeRegister(w, Cpu.AX, delta);

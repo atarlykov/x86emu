@@ -37,33 +37,6 @@ public class Cmp implements Cpu.OpcodeConfiguration {
                 // mod r/m <<- reg
                 Sub.flags(cpu, w, cpu.mrrModRegValue, cpu.mrrRegValue);
             }
-
-/*
-        boolean eq;
-        if ((cpu.mrrMod ^ 0b11) == 0) {
-            // cmp mrrReg ~ mrrModReg
-            if (w) {
-                eq = cpu.mrrRegValue == cpu.mrrModRegValue;
-            } else {
-                if ((cpu.mrrRm & 0b100) == 0) {
-                    eq = (cpu.mrrRegValue & 0xFF) == (cpu.mrrModRegValue & 0xFF);
-                } else {
-                    eq = (cpu.mrrRegValue & 0xFF00) == (cpu.mrrModRegValue & 0xFF00);
-                }
-            }
-        } else {
-            // cmp regIdx ~ ea
-            if (w) {
-                eq = cpu.registers[cpu.mrrRegIndex] == cpu.mem16(cpu.mrrModEA);
-            } else {
-                if ((cpu.mrrRm & 0b100) == 0) {
-                    eq = (cpu.registers[cpu.mrrRegIndex] & 0xFF) == cpu.mem8(cpu.mrrModEA);
-                } else {
-                    eq = (cpu.registers[cpu.mrrRegIndex] >> 8) == cpu.mem8(cpu.mrrModEA);
-                }
-            }
-        }
-*/
         }
     }
 
@@ -87,8 +60,6 @@ public class Cmp implements Cpu.OpcodeConfiguration {
             } else {
                 // we need 8->16 in case if sw=11
                 imm = cpu.ipRead8WithSign() & 0xFFFF;
-                //if ((opcode ^ 0b0000_0011) == 0) {
-                //}
             }
 
             Sub.flags(cpu, w, cpu.mrrModValue, imm);

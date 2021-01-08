@@ -49,45 +49,44 @@ public class Add implements Cpu.OpcodeConfiguration {
      * sets cpu flags based on the result of (dst <- dst + src) operation
      * (af,cf,of,pf,sf,zf) flags are updated
      *
-     * @param cpu    ref to cpu
-     * @param w      word (true) or byte(false) mode
-     * @param value1 dst operand
-     * @param value2 src operand
+     * @param cpu ref to cpu
+     * @param w   word (true) or byte(false) mode
+     * @param dst first operand
+     * @param src second operand
+     * @return sum of operands, used for flags calculation
      */
-    public static void flags(Cpu cpu, boolean w, int value1, int value2)
+    public static int flags(Cpu cpu, boolean w, int dst, int src)
     {
-        int wValue, value;
-        value = value1 + value2;
+        int value = dst + src;
 
         if (w) {
-            wValue = value & Cpu.WORD_MASK;
-            Cpu.Opcode.flagsPszc16(cpu, wValue);
+            Cpu.Opcode.flagsPszc16(cpu, value);
 
             // todo: optimize
-            if (((value1 & Cpu.WORD_MASK_SIGN) == (value2 & Cpu.WORD_MASK_SIGN)) &&
-                    ((value1 & Cpu.WORD_MASK_SIGN) != (value & Cpu.WORD_MASK_SIGN)))
+            if (((dst & Cpu.WORD_MASK_SIGN) == (src & Cpu.WORD_MASK_SIGN)) &&
+                    ((dst & Cpu.WORD_MASK_SIGN) != (value & Cpu.WORD_MASK_SIGN)))
                 cpu.setFlag(Cpu.FLAG_OF);
             else
                 cpu.resetFlag(Cpu.FLAG_OF);
 
         }
         else {
-            wValue = value & Cpu.BYTE_MASK;
-            Cpu.Opcode.flagsPszc8(cpu, wValue);
+            Cpu.Opcode.flagsPszc8(cpu, value);
 
-            if (((value1 & Cpu.BYTE_MASK_SIGN) == (value2 & Cpu.BYTE_MASK_SIGN)) &&
-                    ((value1 & Cpu.BYTE_MASK_SIGN) != (value & Cpu.BYTE_MASK_SIGN)))
+            if (((dst & Cpu.BYTE_MASK_SIGN) == (src & Cpu.BYTE_MASK_SIGN)) &&
+                    ((dst & Cpu.BYTE_MASK_SIGN) != (value & Cpu.BYTE_MASK_SIGN)))
                 cpu.setFlag(Cpu.FLAG_OF);
             else
                 cpu.resetFlag(Cpu.FLAG_OF);
-
         }
 
-        // AF only base on lower nipple of low byte
-        if (0x0F < ((value1 & 0x0F) + (value2 & 0x0F)))
+        // AF is only based on lower nipple of low byte
+        if (0x0F < ((dst & 0x0F) + (src & 0x0F)))
             cpu.setFlag(Cpu.FLAG_AF);
         else
             cpu.resetFlag(Cpu.FLAG_AF);
+
+        return value;
     }
 
     /**
@@ -95,45 +94,45 @@ public class Add implements Cpu.OpcodeConfiguration {
      * not touching the CF flag (for INC opcode)
      * NOTE: direct copy of {@link #flags} without CF assignment
      *
-     * @param cpu    ref to cpu
-     * @param w      word (true) or byte(false) mode
-     * @param value1 dst operand
-     * @param value2 src operand
+     * @param cpu ref to cpu
+     * @param w   word (true) or byte(false) mode
+     * @param dst first operand
+     * @param src second operand
+     * @return sum of operands, used for flags calculation
      */
-    public static void flagsNoCF(Cpu cpu, boolean w, int value1, int value2)
+    public static int flagsNoCF(Cpu cpu, boolean w, int dst, int src)
     {
-        int wValue, value;
-        value = value1 + value2;
+        int value = dst + src;
 
         if (w) {
-            wValue = value & Cpu.WORD_MASK;
-            Cpu.Opcode.flagsPsz16(cpu, wValue);
+            Cpu.Opcode.flagsPsz16(cpu, value);
 
             // todo: optimize
-            if (((value1 & Cpu.WORD_MASK_SIGN) == (value2 & Cpu.WORD_MASK_SIGN)) &&
-                    ((value1 & Cpu.WORD_MASK_SIGN) != (value & Cpu.WORD_MASK_SIGN)))
+            if (((dst & Cpu.WORD_MASK_SIGN) == (src & Cpu.WORD_MASK_SIGN)) &&
+                    ((dst & Cpu.WORD_MASK_SIGN) != (value & Cpu.WORD_MASK_SIGN)))
                 cpu.setFlag(Cpu.FLAG_OF);
             else
                 cpu.resetFlag(Cpu.FLAG_OF);
 
         }
         else {
-            wValue = value & Cpu.BYTE_MASK;
-            Cpu.Opcode.flagsPsz8(cpu, wValue);
+            Cpu.Opcode.flagsPsz8(cpu, value);
 
-            if (((value1 & Cpu.BYTE_MASK_SIGN) == (value2 & Cpu.BYTE_MASK_SIGN)) &&
-                    ((value1 & Cpu.BYTE_MASK_SIGN) != (value & Cpu.BYTE_MASK_SIGN)))
+            if (((dst & Cpu.BYTE_MASK_SIGN) == (src & Cpu.BYTE_MASK_SIGN)) &&
+                    ((dst & Cpu.BYTE_MASK_SIGN) != (value & Cpu.BYTE_MASK_SIGN)))
                 cpu.setFlag(Cpu.FLAG_OF);
             else
                 cpu.resetFlag(Cpu.FLAG_OF);
 
         }
 
-        // AF only base on lower nipple of low byte
-        if (0x0F < ((value1 & 0x0F) + (value2 & 0x0F)))
+        // AF is only based on lower nipple of low byte
+        if (0x0F < ((dst & 0x0F) + (src & 0x0F)))
             cpu.setFlag(Cpu.FLAG_AF);
         else
             cpu.resetFlag(Cpu.FLAG_AF);
+
+        return value;
     }
 
     /**
@@ -147,8 +146,7 @@ public class Add implements Cpu.OpcodeConfiguration {
             boolean w = (opcode & 0b0000_0001) == 0b01;
             boolean d = (opcode & 0b0000_0010) == 0b10;
 
-            int sum = cpu.mrrRegValue + cpu.mrrModValue;
-            flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
+            int sum = flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue);
 
             if (d) {
                 // reg <<- mor r/m
@@ -179,8 +177,7 @@ public class Add implements Cpu.OpcodeConfiguration {
                 imm = cpu.ipRead8();
             }
 
-            int sum = cpu.mrrModValue + imm;
-            flags(cpu, w, cpu.mrrModValue, imm);
+            int sum = flags(cpu, w, cpu.mrrModValue, imm);
 
             cpu.writeByModRegRm(w, sum);
         }
@@ -203,8 +200,7 @@ public class Add implements Cpu.OpcodeConfiguration {
                 imm = cpu.ipRead8();
             }
 
-            int sum = cpu.registers[Cpu.AX] + imm;
-            flags(cpu, w, cpu.registers[Cpu.AX], imm);
+            int sum = flags(cpu, w, cpu.registers[Cpu.AX], imm);
 
             cpu.writeRegister(w, Cpu.AX, sum);
         }
@@ -221,11 +217,8 @@ public class Add implements Cpu.OpcodeConfiguration {
             boolean w = (opcode & 0b0000_0001) == 0b01;
             boolean d = (opcode & 0b0000_0010) == 0b10;
 
-            // CF is 0x0001, so this gives the value
-            int cf = (cpu.flags & Cpu.FLAG_CF);
-
-            int sum = cpu.mrrRegValue + cpu.mrrModValue + cf;
-            flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue + cf);
+            int cf = (cpu.flags >> Cpu.FLAG_CF) & 1;
+            int sum = flags(cpu, w, cpu.mrrRegValue, cpu.mrrModValue + cf);
 
             if (d) {
                 // reg <<- mor r/m
@@ -256,11 +249,8 @@ public class Add implements Cpu.OpcodeConfiguration {
                 imm = cpu.ipRead8();
             }
 
-            // CF is 0x0001, so this gives the value
-            int cf = (cpu.flags & Cpu.FLAG_CF);
-
-            int sum = cpu.mrrModValue + imm + cf;
-            flags(cpu, w, cpu.mrrModValue, imm + cf);
+            int cf = (cpu.flags >> Cpu.FLAG_CF_POS) & 1;
+            int sum = flags(cpu, w, cpu.mrrModValue, imm + cf);
 
             cpu.writeByModRegRm(w, sum);
         }
@@ -283,12 +273,10 @@ public class Add implements Cpu.OpcodeConfiguration {
                 imm = cpu.ipRead8();
             }
 
-            // CF is 0x0001, so this gives the value
-            int cf = (cpu.flags & Cpu.FLAG_CF);
+            int cf = (cpu.flags >> Cpu.FLAG_CF_POS) & 1;
 
-            // todo separate CF addition as in sbb
-            int sum = cpu.registers[Cpu.AX] + imm + cf;
-            flags(cpu, w, cpu.registers[Cpu.AX], imm + cf);
+            // todo separate CF addition as in sbb ? check logic
+            int sum = flags(cpu, w, cpu.registers[Cpu.AX], imm + cf);
 
             cpu.writeByModRegRm(w, sum);
         }
@@ -304,10 +292,7 @@ public class Add implements Cpu.OpcodeConfiguration {
             boolean w = (opcode & 0b0000_0001) == 0b01;
 
             // mod r/m <<- imm
-            flagsNoCF(cpu, w, cpu.mrrModValue, 1);
-
-            int sum = cpu.mrrModValue + 1;
-
+            int sum = flagsNoCF(cpu, w, cpu.mrrModValue, 1);
             cpu.writeByModRegRm(w, sum);
         }
     }
@@ -320,9 +305,8 @@ public class Add implements Cpu.OpcodeConfiguration {
         @Override
         public void execute(Cpu cpu, int opcode) {
             int reg = (opcode & 0b0000_0111);
-            flagsNoCF(cpu, true, cpu.registers[reg], 1);
-            int value = cpu.registers[reg] + 1;
-            cpu.writeRegister(true, reg, value);
+            int sum = flagsNoCF(cpu, true, cpu.registers[reg], 1);
+            cpu.writeRegister(true, reg, sum);
         }
     }
 
