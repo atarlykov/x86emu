@@ -115,7 +115,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
                 cpu.ip = (cpu.ip + unsigned) & 0xFFFF;
             } else {
                 // short label, +-127
-                int unsigned = cpu.ipRead8();
+                int unsigned = cpu.ipRead8WithSign();
                 cpu.ip += (byte) unsigned;
             }
         }
@@ -155,7 +155,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
         @Override
         public void demuxed(Cpu cpu, int opcode) {
             // depends on mode, it's [reg] or [displacement]
-            cpu.segments[Cpu.CS] = cpu.mread(true, cpu.mrrModEA + 2);
+            cpu.segments[Cpu.CS] = cpu.mread16(cpu.mrrModEA + 2);
             cpu.ip = cpu.mrrModValue;
 
             // todo: reg vs [reg], displacement vs [displacement]
@@ -184,7 +184,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JaJnbe extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ( (((cpu.flags >> Cpu.FLAG_ZF_POS) | (cpu.flags >> Cpu.FLAG_CF_POS)) & 0x01) == 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -194,7 +194,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JaeJnbJnc extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_CF) == 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -204,7 +204,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JbJnaeJc extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_CF) != 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -214,7 +214,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JbeJna extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ( (( (cpu.flags >> Cpu.FLAG_ZF_POS) | (cpu.flags >> Cpu.FLAG_CF_POS) ) & 0x01) != 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -224,7 +224,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JeJz extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_ZF) != 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -234,7 +234,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JgJnle extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             //((sf ^ of) | zf) == 0
             if ((
                     (
@@ -249,7 +249,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JgeJnl extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             //(sf ^ of) == 0
             if (
                     (((cpu.flags >> Cpu.FLAG_SF_POS) ^ (cpu.flags >> Cpu.FLAG_OF_POS)) & 1) == 0
@@ -262,7 +262,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JlJnge extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             //(sf ^ of) == 1
             if (
                     (((cpu.flags >> Cpu.FLAG_SF_POS) ^ (cpu.flags >> Cpu.FLAG_OF_POS)) & 1) != 0
@@ -275,7 +275,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JleJng extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             // ((sf ^ of) | zf) == 1
             if ((
                     (
@@ -290,7 +290,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JneJnz extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_ZF) == 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -300,7 +300,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class Jno extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_OF) == 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -310,7 +310,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JnpJpo extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_PF) == 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -320,7 +320,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class Jns extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_SF) == 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -330,7 +330,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class Jo extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_OF) != 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -340,7 +340,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JpJpe extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_PF) != 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -350,7 +350,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class Js extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            byte delta = (byte) cpu.ipRead8();
+            byte delta = (byte) cpu.ipRead8WithSign();
             if ((cpu.flags & Cpu.FLAG_SF) != 0) {
                 cpu.ip = (cpu.ip + delta) & 0xFFFF;
             }
@@ -398,7 +398,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
             // manual: push cs, push ip, double word memory pointed by the instruction is ip:cs
             // depends on mode, it's [reg] or [displacement]
 
-            int cs = cpu.mread(true, cpu.mrrModEA + 2);
+            int cs = cpu.mread16(cpu.mrrModEA + 2);
             cpu.push16(cpu.segments[Cpu.CS]);
             cpu.segments[Cpu.CS] = cs;
 
@@ -406,7 +406,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
             int ip;
             if ((cpu.mrrMod ^ 0b11) == 0) {
                 // mod r/m is a register, use it as ds:[reg]
-                ip = cpu.mread(true, cpu.mrrModValue);
+                ip = cpu.mread16(cpu.mrrModValue);
             } else {
                 // mod r/m is memory, use as ds:[displacement] which == mrrModValue
                 //ip = cpu.mem(true, Cpu.DS, cpu.mrrModEA);
@@ -459,7 +459,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
         @Override
         public void execute(Cpu cpu, int opcode)
         {
-            int offset = cpu.ipRead8();
+            int offset = cpu.ipRead8WithSign();
 
             int cx = cpu.registers[Cpu.CX] - 1;
             cpu.registers[Cpu.CX] = cx;
@@ -477,7 +477,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
         @Override
         public void execute(Cpu cpu, int opcode)
         {
-            int offset = cpu.ipRead8();
+            int offset = cpu.ipRead8WithSign();
 
             int cx = cpu.registers[Cpu.CX] - 1;
             cpu.registers[Cpu.CX] = cx;
@@ -495,7 +495,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
         @Override
         public void execute(Cpu cpu, int opcode)
         {
-            int offset = cpu.ipRead8();
+            int offset = cpu.ipRead8WithSign();
 
             int cx = cpu.registers[Cpu.CX] - 1;
             cpu.registers[Cpu.CX] = cx;
@@ -513,7 +513,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
         @Override
         public void execute(Cpu cpu, int opcode)
         {
-            int offset = cpu.ipRead8();
+            int offset = cpu.ipRead8WithSign();
             int cx = cpu.registers[Cpu.CX] - 1;
             if (cx == 0) {
                 cpu.ip = (cpu.ip + offset) & 0xFFFF;
