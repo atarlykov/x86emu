@@ -173,7 +173,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
 
                 if (w) {
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((cpu.mrrModValue & Cpu.WORD_MASK_SIGN) >> (Cpu.WORD_POS_SIGN - Cpu.FLAG_CF_POS))
                             // (two upper bit check for sign change to OF
@@ -183,7 +183,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
                 } else {
                     // byte mode (1 bit shift)
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((cpu.mrrModValue & Cpu.BYTE_MASK_SIGN) >> (Cpu.BYTE_POS_SIGN - Cpu.FLAG_CF_POS))
                             // (two upper bit check for sign change
@@ -217,7 +217,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
                 value = cpu.mrrModValue >> 1;
 
                 //          (clear CF and OF
-                cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                         // (shifted out bit (sign) to CF
                         | ((cpu.mrrModValue & 0x01) << Cpu.FLAG_CF_POS)
                         // (two upper bit check for sign change
@@ -271,7 +271,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
                 }
 
                 //          (clear CF and OF (sign doesn't change, clear OF)
-                cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                         // (shifted out bit (sign) to CF
                         | ((cpu.mrrModValue & 0x01) << Cpu.FLAG_CF_POS);
             }
@@ -324,7 +324,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
                     value = (cpu.mrrModValue << 1) | (cpu.mrrModValue >> Cpu.WORD_POS_SIGN);
 
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((value & 0x0001) << Cpu.FLAG_CF_POS)
                             // (two upper bit check for sign change to OF
@@ -337,7 +337,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
 
                     // byte mode (1 bit shift)
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((value & 0x0001) << Cpu.FLAG_CF_POS)
                             // (two upper bit check for sign change
@@ -394,7 +394,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
                     value = (cpu.mrrModValue >> 1) | (cpu.mrrModValue << Cpu.WORD_POS_SIGN);
 
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((cpu.mrrModValue & 0x0001) << Cpu.FLAG_CF_POS)
                             // (two upper bit check for sign change to OF
@@ -407,7 +407,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
 
                     // byte mode (1 bit shift)
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((cpu.mrrModValue & 0x0001) << Cpu.FLAG_CF_POS)
                             // (two upper bit check for sign change
@@ -468,7 +468,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
 
                 if (w) {
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((value & Cpu.WORD_MASK_CARRY) >> (Cpu.WORD_POS_CARRY - Cpu.FLAG_CF_POS))
                             // (two upper bit check for sign change to OF
@@ -478,7 +478,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
                 } else {
                     // byte mode (1 bit shift)
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((value & Cpu.BYTE_MASK_CARRY) >> (Cpu.BYTE_POS_CARRY - Cpu.FLAG_CF_POS))
                             // (two upper bit check for sign change
@@ -540,7 +540,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
                     value = (cpu.mrrModValue >> 1) | ((cpu.flags & Cpu.FLAG_CF) << Cpu.WORD_POS_SIGN);
 
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((cpu.mrrModValue & 0x0001) << Cpu.FLAG_CF_POS)
                             // (two upper bit check for sign change to OF
@@ -553,7 +553,7 @@ public class Logic implements Cpu.OpcodeConfiguration {
 
                     // byte mode (1 bit shift)
                     //          (clear CF and OF
-                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF | ~Cpu.FLAG_OF))
+                    cpu.flags = (cpu.flags & (~Cpu.FLAG_CF & ~Cpu.FLAG_OF))
                             // (shifted out bit (sign) to CF
                             | ((cpu.mrrModValue & 0x0001) << Cpu.FLAG_CF_POS)
                             // (two upper bit check for sign change
