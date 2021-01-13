@@ -78,7 +78,7 @@ public class Control implements Cpu.OpcodeConfiguration {
     public static class Lahf extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
-            cpu.writeRegisterUpperByte(0, cpu.flags);
+            cpu.writeRegisterUpperByte(Cpu.AX, cpu.flags);
         }
     }
     public static class Sahf extends Cpu.Opcode {
