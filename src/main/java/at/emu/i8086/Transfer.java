@@ -161,7 +161,10 @@ public class Transfer implements Cpu.OpcodeConfiguration {
             boolean d = (opcode & 0b0000_0010) != 0b0000;
 
             if (d) {
-                cpu.writeSegment(cpu.mrrReg, cpu.mrrModValue);
+                // mrrModValue is incorrect here as last bit of opcode is zero
+                // and Cpu.readModRegRm considers this as byte mode
+                int value = cpu.registers[cpu.mrrModRegIndex];
+                cpu.writeSegment(cpu.mrrReg, value);
             } else {
                 // mod r/m <<- seg
                 cpu.writeByModRegRm(true, cpu.segments[cpu.mrrReg]);
