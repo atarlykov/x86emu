@@ -128,7 +128,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
     public static class JmpInSegIndirect extends Cpu.DemuxedOpcode {
         @Override
         public void demuxed(Cpu cpu, int opcode) {
-            cpu.ip = (cpu.ip + cpu.mrrModValue) & 0xFFFF;
+            cpu.ip = cpu.mrrModValue;
         }
     }
 
@@ -462,7 +462,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
             int offset = cpu.ipRead8WithSign();
 
             int cx = cpu.registers[Cpu.CX] - 1;
-            cpu.registers[Cpu.CX] = cx;
+            cpu.writeRegisterWord(Cpu.CX, cx);
 
             if (cx != 0) {
                 cpu.ip = (cpu.ip + offset) & 0xFFFF;
@@ -480,7 +480,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
             int offset = cpu.ipRead8WithSign();
 
             int cx = cpu.registers[Cpu.CX] - 1;
-            cpu.registers[Cpu.CX] = cx;
+            cpu.writeRegisterWord(Cpu.CX, cx);
 
             if ((cx != 0) && ((cpu.flags & Cpu.FLAG_ZF) != 0)) {
                 cpu.ip = (cpu.ip + offset) & 0xFFFF;
@@ -498,7 +498,7 @@ public class Jmp implements Cpu.OpcodeConfiguration
             int offset = cpu.ipRead8WithSign();
 
             int cx = cpu.registers[Cpu.CX] - 1;
-            cpu.registers[Cpu.CX] = cx;
+            cpu.writeRegisterWord(Cpu.CX, cx);
 
             if ((cx != 0) && ((cpu.flags & Cpu.FLAG_ZF) == 0)) {
                 cpu.ip = (cpu.ip + offset) & 0xFFFF;
