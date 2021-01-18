@@ -160,13 +160,30 @@ public class Transfer implements Cpu.OpcodeConfiguration {
             // 1 - r/m to segment reg
             boolean d = (opcode & 0b0000_0010) != 0b0000;
 
+            // decoded mrr* are incorrect here as last bit of opcode is zero
+            // and Cpu.readModRegRm() considers this as byte mode,
+            // but this instruction is always in word mode.
+            // cpu.mrrReg is correct as -reg- part has 0SR format,
+            // cpu.mrrModRegIndex must be fixed,
+            // cpu.mrrModEA is correct in non reg mode
+
             if (d) {
-                // mrrModValue is incorrect here as last bit of opcode is zero
-                // and Cpu.readModRegRm considers this as byte mode
-                int value = cpu.registers[cpu.mrrModRegIndex];
+                // seg <<- mod r/m
+                int value;
+                if ((cpu.mrrMod ^ 0b11) == 0) {
+                    // register mode, fix to original word type index
+                    value = cpu.registers[cpu.mrrRm];
+                } else {
+                    value = cpu.mread(true, cpu.mrrModEA);
+                }
                 cpu.writeSegment(cpu.mrrReg, value);
-            } else {
+            }
+            else {
                 // mod r/m <<- seg
+                if ((cpu.mrrMod ^ 0b11) == 0) {
+                    // register mode, fix to original word type index
+                    cpu.mrrModRegIndex = cpu.mrrRm;
+                }
                 cpu.writeByModRegRm(true, cpu.segments[cpu.mrrReg]);
             }
         }
@@ -244,9 +261,9 @@ public class Transfer implements Cpu.OpcodeConfiguration {
         @Override
         public void execute(Cpu cpu, int opcode) {
             cpu.readModRegRm(opcode);
-            // cpu.mrrModValue is incorrect here as opcode
-            // has last bit == 0 (considered as w=byte)
-
+            // decoded mrr* are incorrect here as last bit of opcode is zero
+            // and Cpu.readModRegRm() considers this as byte mode,
+            // but this instruction is always in word mode.
             int seg = cpu.mread16(cpu.mrrModEA);
             cpu.writeSegment(Cpu.ES, seg);
             int offset = cpu.mread16(cpu.mrrModEA + 2);
