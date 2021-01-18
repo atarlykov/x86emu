@@ -327,7 +327,7 @@ public class Strings implements Cpu.OpcodeConfiguration {
                 src = cpu.mread8(cpu.registers[Cpu.SI]);
             }
 
-            cpu.registers[Cpu.SI] += delta;
+            cpu.writeRegisterWord(Cpu.SI, cpu.registers[Cpu.SI] + delta);
 
             cpu.writeRegister(w, Cpu.AX, src);
         }
@@ -398,7 +398,7 @@ public class Strings implements Cpu.OpcodeConfiguration {
                 cpu.mwrite8(Cpu.ES, cpu.registers[Cpu.DI], ax);
             }
 
-            cpu.registers[Cpu.SI] += delta;
+            cpu.writeRegisterWord(Cpu.DI, cpu.registers[Cpu.DI] + delta);
         }
 
         /**
