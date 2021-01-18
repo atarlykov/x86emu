@@ -25,7 +25,7 @@ public class Control implements Cpu.OpcodeConfiguration {
         ));
         tmp.putAll(Map.of(
                 "1111_0100", Hlt.class,
-                "1111_1011", Wait.class,
+                "1001_1011", Wait.class,
                 "1101_1***", Esc.class,
                 "1111_0000", Lock.class,
                 "001*_*110", Segment.class
