@@ -22,10 +22,10 @@ public class Cpu
     public static final int DI = 7;
 
     // segment registers indices in the segments array
-    public static final int CS = 0;
-    public static final int DS = 1;
+    public static final int ES = 0;
+    public static final int CS = 1;
     public static final int SS = 2;
-    public static final int ES = 3;
+    public static final int DS = 3;
 
     // CF
     // For x86 ALU size of 8 bits, an 8-bit two's complement interpretation,
@@ -113,15 +113,21 @@ public class Cpu
     public static final int INT_1C_TIME             = 0x1C;
 
 
+
     public void nmi(int number) {
     }
 
+    
     /**
-     * Executes interrupts with the specified type,
-     * saves flags and cs:ip into the stack, resets TF and IF
-     * @param type type (number) of the interrupt
+     * Executes interrupt of the specified number,
+     * doesn't perform any checks.
+     * Can be used for cpu interrupts (int x, into, div zero) directly as they are not masked,
+     * can also be used for NMI and INTR(pic) after mask checks.
+     *
+     * Saves flags and cs:ip into the stack, resets TF and IF
+     * @param number number of the interrupt
      */
-    public void interrupt(int type)
+    public void interrupt(int number)
     {
         push16(flags);
         flags &= (~Cpu.FLAG_TF | ~Cpu.FLAG_IF);
@@ -129,8 +135,9 @@ public class Cpu
         push16(ip);
 
         // interrupt vector
-        int offset = type * 4;
-        registers[Cpu.CS] = mread16Direct(0x0000, offset + 2);
+        int offset = number * 4;
+        int cs = mread16Direct(0x0000, offset + 2);
+        writeSegment(Cpu.CS, cs);
         ip = mread16Direct(0x0000, offset);
     }
 
@@ -140,7 +147,7 @@ public class Cpu
     // common registers AX,CX,DX,BX,SP,BP,SI,DI
     int[] registers = new int[8];
 
-    // segment registers CS,DS,SS,ES
+    // segment registers ES,CS,SS,DS
     int[] segments = new int[4];
 
     // effective linear address of a segment
@@ -191,6 +198,7 @@ public class Cpu
     int mrrRegValue;        // mod-reg-r/m:  register[mrrRegIndex] depends on w(8|16)
 
     /**
+     *
      * writes one of common registers based on reg index and byte/word mode,
      * value is cleared with byte (0xff) or word (0xffff) mask
      * @param word word mode (1) and byte mode (0)
@@ -199,6 +207,7 @@ public class Cpu
      */
     public void writeRegister(boolean word, int regIndex, int value)
     {
+/*
         if (word) {
             registers[regIndex] = value & 0xFFFF;
         } else {
@@ -206,6 +215,24 @@ public class Cpu
             regFullValue &= 0xFF00;
             regFullValue |= (value & 0xFF);
             registers[regIndex] = regFullValue;
+        }
+*/
+        if (word) {
+            registers[regIndex] = value & 0xFFFF;
+        } else {
+            int regPartIndex = regIndex & 0b11;
+            int regFullValue = registers[regPartIndex];
+
+            if ((regIndex & 0b100) == 0) {
+                // lower part (AL, ..)
+                regFullValue &= 0xFF00;
+                regFullValue |= (value & 0xFF);
+            } else {
+                // upper part (AH, ..)
+                regFullValue &= 0x00FF;
+                regFullValue |= (value & 0xFF) << 8;
+            }
+            registers[regPartIndex] = regFullValue;
         }
     }
 
@@ -262,6 +289,7 @@ public class Cpu
     /**
      * Reads mod-reg-r/m byte pointed with instruction pointer and parses it
      * into internal cpu fields ready to be processed by an opcode function.
+     * (some instructions break this contract - like mov SR,R)
      *
      *  table 4-10
      *  ------------------+----------+--------------+----------------+------------------+------------
@@ -299,9 +327,9 @@ public class Cpu
             mrrRegValue = registers[mrrRegIndex];
         } else {
             // 8 bit mode, only 4 register - xH or xL
-            mrrRegIndex &= 0b011;
+            // mrrRegIndex &= 0b011; <-- we need original index to distinguish xH/xL later on write
             // read full register and adjust
-            mrrRegValue = registers[mrrRegIndex];
+            mrrRegValue = registers[mrrRegIndex & 0b011];
             if ((mrrReg & 0b100) == 0) {
                 mrrRegValue &= 0xFF;
             } else {
@@ -322,7 +350,7 @@ public class Cpu
                 mrrModRegIndex &= 0b011;
                 // read full register and adjust
                 mrrModRegValue = registers[mrrModRegIndex];
-                if ((mrrMod & 0b100) == 0) {
+                if ((mrrRm & 0b100) == 0) {
                     mrrModRegValue &= 0xFF;
                 } else {
                     mrrModRegValue >>= 8;
@@ -345,7 +373,7 @@ public class Cpu
                 case 0b011: eff = Cpu.SS; mrrModEA = registers[BP] + registers[DI]; break;
                 case 0b100:               mrrModEA = registers[SI]; break;
                 case 0b101:               mrrModEA = registers[DI]; break;
-                case 0b110:               mrrModEA = registers[BP]; break;
+                case 0b110: eff = Cpu.SS; mrrModEA = registers[BP]; break;
                 case 0b111:               mrrModEA = registers[BX]; break;
             }
 
@@ -354,11 +382,9 @@ public class Cpu
                 if (mrrRm == 0b110) {
                     // mod=00 is the template above except for r/m=110,
                     // that uses a direct address from the displacement
+                    // and DS based addressing
                     mrrModEA = ipRead16();
-                } else {
-                    // otherwise it's [bp] based reference,
-                    // use SS segment as default
-                    eff = Cpu.SS;
+                    eff = Cpu.DS;
                 }
             }
             else if (mrrMod == 0b01)
@@ -377,9 +403,9 @@ public class Cpu
             // prepare linear address of opcode mem segment,
             // will be used in mread/mwrite
             if (overrideSegmentIndex != -1) {
-                effOpcodeMemSegment = segments[overrideSegmentIndex] << 8;
+                effOpcodeMemSegment = segments[overrideSegmentIndex] << 4;
             } else {
-                effOpcodeMemSegment = segments[eff] << 8;
+                effOpcodeMemSegment = segments[eff] << 4;
             }
 
             // pre-read value from memory, it will be consumed
@@ -404,7 +430,12 @@ public class Cpu
         if (word) {
             registers[regIndex] = value & 0xFFFF;
         } else {
-            int regFullValue = registers[regIndex];
+            /*
+                seems filtered index is not necessary here as index is 0..3
+                and upper/lower part is encoded with mrr
+             */
+            int regPartIndex = regIndex & 0b11; 
+            int regFullValue = registers[regPartIndex];
             if ((mrrRm & 0b100) == 0) {
                 // lower part (AL, ..)
                 regFullValue &= 0xFF00;
@@ -414,7 +445,7 @@ public class Cpu
                 regFullValue &= 0x00FF;
                 regFullValue |= (value & 0xFF) << 8;
             }
-            registers[regIndex] = regFullValue;
+            registers[regPartIndex] = regFullValue;
         }
     }
 
@@ -478,7 +509,7 @@ public class Cpu
      */
     int mread(boolean word, int rSeg, int offset)
     {
-        int la = (segments[rSeg] << 8) + offset;
+        int la = (segments[rSeg] << 4) + offset;
         if (word) {
             return ((memory[la] & 0xFF)) | ((memory[la + 1] & 0xFF) << 8);
         } else {
@@ -506,7 +537,7 @@ public class Cpu
      */
     int mread8(int rSeg, int offset)
     {
-        int la = (segments[rSeg] << 8) + offset;
+        int la = (segments[rSeg] << 4) + offset;
         return (memory[la] & 0xFF);
     }
 
@@ -530,7 +561,7 @@ public class Cpu
      */
     int mread16(int rSeg, int offset)
     {
-        int la = (segments[rSeg] << 8) + offset;
+        int la = (segments[rSeg] << 4) + offset;
         return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
     }
 
@@ -542,7 +573,7 @@ public class Cpu
      */
     int mread16Direct(int seg, int offset)
     {
-        int la = (seg << 8) + offset;
+        int la = (seg << 4) + offset;
         return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
     }
 
@@ -585,20 +616,20 @@ public class Cpu
 
     void mwrite16(int rSeg, int offset, int value)
     {
-        int la = (segments[rSeg] << 8) + offset;
+        int la = (segments[rSeg] << 4) + offset;
         memory[la] = (byte)value;
         memory[la + 1] = (byte)(value >> 8);
     }
 
     void mwrite8(int rSeg, int offset, int value)
     {
-        int la = (segments[rSeg] << 8) + offset;
+        int la = (segments[rSeg] << 4) + offset;
         memory[la] = (byte)value;
     }
 
     /**
      * stack support routines
-     *  ss:sp    ->> [(ss << 8) | sp]
+     *  ss:sp    ->> [(ss << 4) | sp]
      *  push ax  ->>  sp -= 2; [ss:sp] = ax;
      *  pop ax   ->>  ax = [ss:sp]; sp += 2;
      *  ss:00 is the full stack
@@ -613,7 +644,7 @@ public class Cpu
     void push(boolean word, int value)
     {
         registers[SP] -= 1;
-        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        int la = (segments[Cpu.SS] << 4) + registers[SP];
         memory[la] = (byte) value;
         if (word) {
             registers[SP] -= 1;
@@ -628,7 +659,7 @@ public class Cpu
     void push16(int value)
     {
         registers[SP] -= 2;
-        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        int la = (segments[Cpu.SS] << 4) + registers[SP];
         memory[la] = (byte) value;
         memory[la + 1] = (byte)(value >> 8);
     }
@@ -639,7 +670,7 @@ public class Cpu
      */
     int pop16()
     {
-        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        int la = (segments[Cpu.SS] << 4) + registers[SP];
         registers[SP] += 2;
         return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
     }
@@ -651,7 +682,7 @@ public class Cpu
     void push8(int value)
     {
         registers[SP] -= 1;
-        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        int la = (segments[Cpu.SS] << 4) + registers[SP];
         memory[la] = (byte) value;
     }
 
@@ -661,7 +692,7 @@ public class Cpu
      */
     int pop8()
     {
-        int la = (segments[Cpu.SS] << 8) + registers[SP];
+        int la = (segments[Cpu.SS] << 4) + registers[SP];
         registers[SP] += 1;
         return memory[la] & 0xFF;
     }
@@ -692,14 +723,14 @@ public class Cpu
     int ipRead8()
     {
         // todo could be optimized with cached CS and short ip
-        int tmp = memory[(segments[Cpu.CS] << 8) + (ip & 0xFFFF)] & 0xFF;
+        int tmp = memory[(segments[Cpu.CS] << 4) + (ip & 0xFFFF)] & 0xFF;
         ip++;
         return tmp;
     }
 
     int ipRead8WithSign()
     {
-        int tmp = memory[(segments[Cpu.CS] << 8) + (ip & 0xFFFF)];
+        int tmp = memory[(segments[Cpu.CS] << 4) + (ip & 0xFFFF)];
         ip++;
         return tmp;
     }
@@ -712,12 +743,74 @@ public class Cpu
     int ipRead16()
     {
         // todo that could overflow ip
-        int la = (segments[Cpu.CS] << 8) + (ip & 0xFFFF);
+        int la = (segments[Cpu.CS] << 4) + (ip & 0xFFFF);
         int tmp = (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
         ip += 2;
         return tmp;
     }
 
+
+    void pout(boolean word, int port, int value) {
+        PortHandler handler = ports[port];
+        if (handler != null) {
+            handler.pout(word, port, value);
+        } else {
+            System.out.printf("-XX OUT[%04X] no handler%n", port);
+        }
+    }
+
+    int pin(boolean word, int port) {
+        PortHandler handler = ports[port];
+        if (handler != null) {
+            int value = ports[port].pin(word, port);
+            return value;
+        } else {
+            System.out.printf("-XX  IN[%04X] no handler%n", port);
+            return 0;
+        }
+    }
+
+    PortHandler[] ports = new PortHandler[65536];
+
+    PIC8259 pic = new PIC8259(0x20, 0x21, true);
+    PTI8253 pti = new PTI8253(pic);
+    DMA8237 dma = new DMA8237();
+
+    XtKeyboard keyboard = new XtKeyboard();
+    PPI8255 ppi = new PPI8255(keyboard);
+
+
+    {
+        ports[0x20] = pic;
+        ports[0x21] = pic;
+
+        for (int port = 0; port < 16; port++) {
+            ports[port] = dma;
+            ports[0xC0 + port*2] = dma;
+
+            ports[0x80 + port] = dma;
+        }
+
+        ports[0x60] = ppi;
+        ports[0x61] = ppi;
+        ports[0x62] = ppi;
+        ports[0x63] = ppi;
+
+        ports[0x40] = pti;
+        ports[0x41] = pti;
+        ports[0x42] = pti;
+        ports[0x43] = pti;
+    }
+
+    static class PortHandler {
+
+        void pout(boolean word, int port, int value) {
+        }
+
+        int pin(boolean word, int port) {
+            return 0;
+        }
+    }
 
     /**
      * registered opcodes
@@ -741,6 +834,7 @@ public class Cpu
             new Control(),
             new Ports(),
             new Strings(),
+            new Interrupt()
     };
 
     /**
@@ -1356,11 +1450,12 @@ public class Cpu
      * @return string representation of registers
      */
     public String dump() {
-        return String.format("@%04X  R: %04X  %04X  %04X  %04X - %04X  %04X  %04X  %04X     %s",
+        return String.format("@%04X  R: %04X %04X %04X %04X - %04X %04X %04X %04X  %s  %04X %04X %04X %04X",
                 ip,
                 registers[0], registers[1], registers[2], registers[3],
                 registers[4], registers[5], registers[6], registers[7],
-                dumpFlag());
+                dumpFlag(),
+                segments[0], segments[1], segments[2], segments[3]);
     }
 
     /**
