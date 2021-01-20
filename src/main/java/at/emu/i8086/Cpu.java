@@ -658,7 +658,7 @@ public class Cpu
      */
     void push16(int value)
     {
-        registers[SP] -= 2;
+        writeRegisterWord(SP, registers[SP] - 2);
         int la = (segments[Cpu.SS] << 4) + registers[SP];
         memory[la] = (byte) value;
         memory[la + 1] = (byte)(value >> 8);
@@ -671,7 +671,7 @@ public class Cpu
     int pop16()
     {
         int la = (segments[Cpu.SS] << 4) + registers[SP];
-        registers[SP] += 2;
+        writeRegisterWord(SP, registers[SP] + 2);
         return (memory[la] & 0xFF) | ((memory[la + 1] & 0xFF) << 8);
     }
 
@@ -681,7 +681,7 @@ public class Cpu
      */
     void push8(int value)
     {
-        registers[SP] -= 1;
+        writeRegisterWord(SP, registers[SP] - 1);
         int la = (segments[Cpu.SS] << 4) + registers[SP];
         memory[la] = (byte) value;
     }
@@ -693,7 +693,7 @@ public class Cpu
     int pop8()
     {
         int la = (segments[Cpu.SS] << 4) + registers[SP];
-        registers[SP] += 1;
+        writeRegisterWord(SP, registers[SP] + 1);
         return memory[la] & 0xFF;
     }
 
@@ -778,7 +778,7 @@ public class Cpu
 
     XtKeyboard keyboard = new XtKeyboard();
     PPI8255 ppi = new PPI8255(keyboard);
-
+    CGA video = new CGA();
 
     {
         ports[0x20] = pic;
@@ -800,6 +800,19 @@ public class Cpu
         ports[0x41] = pti;
         ports[0x42] = pti;
         ports[0x43] = pti;
+
+        video.start();
+        ports[0x3D8] = video;
+        ports[0x3D9] = video;
+        ports[0x3DA] = video;
+        ports[0x3DB] = video;
+        ports[0x3DC] = video;
+        // 6485 registers has diff addresses
+        String[] extend = OpcodeConfiguration.extend("1101_0***");
+        for (String sPort : extend) {
+            int port = Integer.parseInt(sPort, 2);
+            ports[0x300 + port] = video;
+        }
     }
 
     static class PortHandler {
@@ -873,6 +886,10 @@ public class Cpu
      */
     void step()
     {
+        // reset default segment as some opcodes could
+        // override it (EA in mod-reg-rm)
+        effOpcodeMemSegment = segments[Cpu.DS] << 4;
+
         // read next byte from cs:ip,
         // that could be an opcode
         // or some prefix
