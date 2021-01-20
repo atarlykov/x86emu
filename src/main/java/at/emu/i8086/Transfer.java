@@ -6,7 +6,7 @@ import java.util.Map;
 /**
  * Implementation of transfer opcodes
  */
-public class Transfer implements Cpu.OpcodeConfiguration {
+public class Transfer implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration {
 
     /**
      * Based on i8086 manual:
@@ -42,10 +42,10 @@ public class Transfer implements Cpu.OpcodeConfiguration {
                 "1100_011*", Map.of("000", MovRmImm.class),
                 "1011_****", MovRegImm.class,
                 "1010_00**", MovAccMem.class,
-                "1000_11*0", Map.of("0**", MovRmSR.class),
-                "1000_011*", XchgRmR.class
+                "1000_11*0", Map.of("0**", MovRmSR.class)
         ));
         tmp.putAll(Map.of(
+                "1000_011*", XchgRmR.class,
                 "1001_0**1", XchgRAcc.class,
                 "1001_0010", XchgRAcc.class,
                 "1001_0100", XchgRAcc.class,
@@ -66,6 +66,48 @@ public class Transfer implements Cpu.OpcodeConfiguration {
         ));
 
         return tmp;
+    }
+
+    @Override
+    public Map<String, Configuration> getClockedConfiguration()
+    {
+        Map<String, Configuration> c = new HashMap<>();
+
+        config(c, "1000_100*", "**_***_***", S( 9, MovRmR.class, "MOV", "[M] <-  R"));
+        config(c, "1000_101*", "**_***_***", S( 8, MovRmR.class, "MOV", " R  <- [M]"));
+        config(c, "1000_10**", "11_***_***", S( 2, MovRmR.class, "MOV", " R  <-  R"), true);
+
+        config(c, "1100_0110", "**_000_***", S(10, MovRegImm.class, "MOV", "[M8] <- I8"));
+        config(c, "1100_0110", "11_000_***", S( 4, MovRegImm.class, "MOV", "R8mr <- I8"), true);
+        config(c, "1100_0111", "**_000_***", S(10, MovRegImm.class, "MOV", "[M16] <- I16"));
+        config(c, "1100_0111", "11_000_***", S( 4, MovRegImm.class, "MOV", "R16mr <- I16"), true);
+        config(c, "1011_****",               S( 4, MovRegImm.class, "MOV", "R* <- IMM*"));
+
+        config(c, "1010_00**",               S(10, MovAccMem.class, "MOV", "A <-> [M]"));
+
+        config(c, "1000_1110", "**_0**_***", S( 8, MovRmSR.class, "MOV", "SR <- [M16]"));
+        config(c, "1000_1110", "11_0**_***", S( 2, MovRmSR.class, "MOV", "SR <-  R16"), true);
+        config(c, "1000_1100", "**_0**_***", S( 9, MovRmSR.class, "MOV", "[M16] <- SR"));
+        config(c, "1000_1100", "11_0**_***", S( 2, MovRmSR.class, "MOV", " R16  <- SR"), true);
+
+
+        config(c, "1000_011*", "**_***_***", S(17, XchgRmR.class, "XCHG", "R <-> [M]"));
+        config(c, "1000_011*", "11_***_***", S( 4, XchgRmR.class, "XCHG", "R <->  R"), true);
+
+        config(c, "1001_0***",               S( 3, XchgRAcc.class, "XCHG", "A <-> R"));
+        config(c, "1001_0000",               S( 3, Nop.class, "NOP", ""), true);
+
+
+        config(c, "1101_0111",               S(11, Xlat.class, "XLAT", ""));
+
+        config(c, "1000_1101",               S( 2, Lea.class, "LEA", "R16 <- [M16]"));
+        config(c, "1100_0101",               S(16, Lds.class, "LDS", "DS <- [M16]"));
+        config(c, "1100_0100",               S(16, Les.class, "LES", "ES <- [M16]"));
+
+        config(c, "1001_1000",               S( 2, Cbw.class, "CBW", ""));
+        config(c, "1001_1001",               S( 5, Cwd.class, "CWD", ""));
+
+        return c;
     }
 
     /**

@@ -1,7 +1,6 @@
 package at.emu.i8086;
 
 import java.util.Arrays;
-import java.util.Formatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -930,28 +929,6 @@ public class Cpu
             } else {
                 flagsPsz8(cpu, value);
             }
-
-            /*
-            int zmask, cmask, smask, wValue;
-
-            if (w) {
-                zmask = Cpu.WORD_MASK;
-                cmask = Cpu.WORD_MASK_C;
-                smask = Cpu.WORD_MASK_S;
-            } else {
-                zmask = Cpu.BYTE_MASK;
-                cmask = Cpu.BYTE_MASK_C;
-                smask = Cpu.BYTE_MASK_S;
-            }
-
-            // value without carry
-            wValue = value & zmask;
-
-            int bitCount = Integer.bitCount(wValue & Cpu.BYTE_MASK);
-            if ((bitCount & 0x1) == 0) cpu.setFlag(Cpu.FLAG_PF); else cpu.resetFlag(Cpu.FLAG_PF);
-            if ((wValue & smask) != 0) cpu.setFlag(Cpu.FLAG_SF); else cpu.resetFlag(Cpu.FLAG_SF);
-            if ((wValue & zmask) == 0) cpu.setFlag(Cpu.FLAG_ZF); else cpu.resetFlag(Cpu.FLAG_ZF);
-            */
         }
 
         /**
@@ -988,14 +965,6 @@ public class Cpu
             value &= Cpu.WORD_MASK;
 
             int bitCount = Integer.bitCount(value);
-
-            /*
-            // quicker path ?
-            cpu.flags = (cpu.flags & ~Cpu.FLAG_PF) | ((bitCount & 0x1) << Cpu.FLAG_PF_POS);
-            //          (    clear SF            )   (    SIGN to SF position and clear other bits                  )
-            cpu.flags = (cpu.flags & ~Cpu.FLAG_SF) | ((value >> (Cpu.WORD_SIGN_POS - Cpu.FLAG_SF_POS)) & Cpu.FLAG_SF);
-            cpu.flags = (cpu.flags & ~Cpu.FLAG_ZF);
-            */
 
             // quickest path
             //          ( clear three flags at once)
@@ -1190,7 +1159,6 @@ public class Cpu
             char[] binOpcode = new char[8];
             Arrays.fill(binOpcode, '0');
 
-            Formatter formatter = new Formatter(System.out);
             for (int i = 0; i < registry.length; i++) {
                 Opcode opcode = registry[i];
 
@@ -1462,6 +1430,197 @@ public class Cpu
         }
     }
 
+    /**
+     * interface to provide configuration of opcodes with machine clock timings
+     */
+    public interface ClockedOpcodeConfiguration {
+        /**
+         * base marker interface for configurations
+         */
+        interface Configuration {}
+
+        /**
+         * main method to be implemented by opcode classes and provide information
+         * about contained opcodes
+         * keys are binary representation of opcode byte
+         * @return <template expression, configuration>
+         */
+        Map<String, Configuration> getClockedConfiguration();
+
+        /**
+         * implements configuration for any target opcode,
+         * one byte or with mrr part
+         */
+        class SimpleConfiguration implements Configuration {
+            int     clocks;
+            Class<? extends Opcode> opClass;
+            String  mnemonic;
+        }
+
+        /**
+         * container to opcodes that depends on mrr byte
+         */
+        class ModRegRmConfiguration implements Configuration {
+            Map<String, SimpleConfiguration> mrr = new HashMap<>();
+        }
+
+        /**
+         * service DSL method to simplify configurations
+         * @param clocks number of clock
+         * @param opClass class that implements the opcode
+         * @param mnemonic mnemonic
+         * @return descriptor
+         */
+        default SimpleConfiguration S(int clocks, Class<? extends Cpu.Opcode> opClass, String mnemonic)
+        {
+            SimpleConfiguration c = new SimpleConfiguration();
+            c.clocks = clocks;
+            c.opClass = opClass;
+            c.mnemonic = mnemonic;
+            return c;
+        }
+
+        /**
+         * service DSL method to simplify configurations
+         * @param clocks number of clock
+         * @param opClass class that implements the opcode
+         * @param mnemonic mnemonic
+         * @param comment comment, could be used later
+         * @return descriptor
+         */
+        default SimpleConfiguration S(int clocks, Class<? extends Cpu.Opcode> opClass, String mnemonic, String comment)
+        {
+            return S(clocks, opClass, mnemonic);
+        }
+
+        /**
+         * DSL method to populate configuration map with another opcode
+         * opMask can contain '01*_' characters where:
+         * 0|1 - zero or one in the appropriate position of key
+         *  '_' - divider, will be ignored
+         *  '*' - template, will be substituted with 0 and 1
+         * @param config configuration to populate
+         * @param opMask opcode mask to be parsed
+         * @param opConfig opcode configuration
+         */
+        default void config(Map<String, Configuration> config, String opMask, SimpleConfiguration opConfig)
+        {
+            config(config, opMask, opConfig, false);
+        }
+
+        /**
+         * DSL method to populate configuration map with another opcode
+         * opMask can contain '01*_' characters where:
+         * 0|1 - zero or one in the appropriate position of key
+         *  '_' - divider, will be ignored
+         *  '*' - template, will be substituted with 0 and 1
+         * @param config configuration to populate
+         * @param opMask opcode mask to be parsed
+         * @param opConfig opcode configuration
+         * @param override allows to override opcode (DANGEROUS)
+         */
+        default void config(Map<String, Configuration> config, String opMask, SimpleConfiguration opConfig, boolean override)
+        {
+            String[] opVariants = OpcodeConfiguration.extend(opMask);
+            for (String opVariant: opVariants) {
+                if (!override && config.containsKey(opVariant)) {
+                    throw new RuntimeException("opcode configuration " + opMask + " already defined ("+ opVariant +")");
+                }
+                config.put(opVariant, opConfig);
+            }
+        }
+
+        /**
+         * DSL method to populate configuration map with opcode depending on mrr byte,
+         * opMask and mrrMask can contain '01*_' characters where:
+         * 0|1 - zero or one in the appropriate position of key
+         *  '_' - divider, will be ignored
+         *  '*' - template, will be substituted with 0 and 1
+         *
+         * @param config configuration to populate
+         * @param opMask opcode mask to be parsed
+         * @param mrrMask mask for -reg- part of mrr byte
+         * @param opConfig opcode configuration
+         */
+        default void config(Map<String, Configuration> config, String opMask, String mrrMask, SimpleConfiguration opConfig)
+        {
+            config(config, opMask, mrrMask, opConfig, false);
+        }
+
+        /**
+         * DSL method to populate configuration map with opcode depending on mrr byte,
+         * opMask and mrrMask can contain '01*_' characters where:
+         * 0|1 - zero or one in the appropriate position of key
+         *  '_' - divider, will be ignored
+         *  '*' - template, will be substituted with 0 and 1
+         *
+         * override flag allows to have configurations like:
+         * 1000_1110   **_0**xxx  {no override}     ; MOV   SR <- M  12+EA
+         * 1000_1110   11_0**xxx  {override = true} ; MOV   SR <- R   2
+         *
+         * @param config configuration to populate
+         * @param opMask opcode mask to be parsed
+         * @param mrrMask mask for -reg- part of mrr byte
+         * @param opConfig opcode configuration
+         * @param override allows to override mrr based part of configuration
+         */
+        default void config(Map<String, Configuration> config, String opMask, String mrrMask, SimpleConfiguration opConfig, boolean override)
+        {
+            String[] opVariants = OpcodeConfiguration.extend(opMask);
+            String[] mrrVariants = OpcodeConfiguration.extend(mrrMask);
+
+            for (String opVariant: opVariants)
+            {
+                Configuration mrrConfig = config.get(opVariant);
+                if (mrrConfig == null) {
+                    mrrConfig = new ModRegRmConfiguration();
+                    config.put(opVariant, mrrConfig);
+                }
+
+                if (!(mrrConfig instanceof ModRegRmConfiguration)) {
+                    throw new RuntimeException("incorrect opcode configuration for " + opMask + "  " + mrrConfig.getClass().getSimpleName());
+                }
+
+                ModRegRmConfiguration mrrConfigTyped = (ModRegRmConfiguration)mrrConfig;
+                for (String mrrVariant: mrrVariants)
+                {
+                    if (!override && mrrConfigTyped.mrr.containsKey(mrrVariant)) {
+                        throw new RuntimeException("opcode configuration [" + opMask + ", " + mrrMask  + ", " + mrrVariant + "] already defined ");
+                    }
+                    mrrConfigTyped.mrr.put(mrrVariant, opConfig);
+                }
+            }
+        }
+
+        /**
+         * merges to configurations together validating intersections
+         * @param dst destination configuration
+         * @param src source configuration
+         */
+        default void merge(Map<String, Configuration> dst, Map<String, Configuration> src)
+        {
+            src.forEach( (srcOpcode, srcCconfig) -> {
+                Configuration dstConfig = dst.get(srcOpcode);
+                if (dstConfig == null) {
+                    dst.put(srcOpcode, srcCconfig);
+                }
+                else if (dstConfig instanceof SimpleConfiguration) {
+                    throw new RuntimeException("error merging configurations for " + srcOpcode + " opcode");
+                } else {
+                    ModRegRmConfiguration dstMrrConfig = (ModRegRmConfiguration) dstConfig;
+                    if (!(srcCconfig instanceof ModRegRmConfiguration)) {
+                        throw new RuntimeException("can't merge simple config into modregmod one for " + srcOpcode + " opcode");
+                    }
+                    ((ModRegRmConfiguration) srcCconfig).mrr.forEach((srcMrr, srcMrrConfig) -> {
+                        if (dstMrrConfig.mrr.containsKey(srcMrr)) {
+                            throw new RuntimeException("can't merge modregmod configuration for [" + srcOpcode + ", " + srcMrr + "] opcode");
+                        }
+                        dstMrrConfig.mrr.put(srcMrr, srcMrrConfig);
+                    });
+                }
+            });
+        }
+    }
 
     /**
      * @return string representation of registers

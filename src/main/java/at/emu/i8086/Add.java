@@ -1,11 +1,12 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Implementation of addition operations
  */
-public class Add implements Cpu.OpcodeConfiguration {
+public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration {
 
     /**
      * Additions: ADD ADC INC AAA DAA
@@ -43,6 +44,31 @@ public class Add implements Cpu.OpcodeConfiguration {
                 "0011_0111", Aaa.class,
                 "0010_0111", Daa.class
         );
+    }
+
+    @Override
+    public Map<String, Configuration> getClockedConfiguration()
+    {
+        Map<String, Configuration> c = new HashMap<>();
+
+        config(c, "0000_000*", "**_***_***", S(16, AddRmR.class, "ADD", "[M] <-  R"));
+        config(c, "0000_001*", "**_***_***", S( 9, AddRmR.class, "ADD", " R  <- [M]"));
+        config(c, "0000_00**", "11_***_***", S( 3, AddRmR.class, "ADD", " R  <-  R"), true);
+
+        config(c, "0000_010*",               S( 4, AddAccImm.class, "ADD", " A   <- Rm"));
+        config(c, "1000_00**", "**_000_***", S(17, AddRmImm.class,  "ADD", "[M]  <- I"));
+        config(c, "1000_00**", "11_000_***", S( 4, AddRmImm.class,  "ADD", " Rm  <- I"), true);
+
+
+        config(c, "0100_0***",               S( 4, IncReg.class, "INC", "R16"));
+        config(c, "1111_111*", "**_000_***", S(15, IncReg.class, "INC", "R"));
+        config(c, "1111_1110", "11_000_***", S( 3, IncReg.class, "INC", "R8"));
+        config(c, "1111_1111", "11_000_***", S( 2, IncReg.class, "INC", "R16"));
+
+        config(c, "0011_0111",               S( 4, Aaa.class, "AAA", ""));
+        config(c, "0010_0111",               S( 4, Daa.class, "DAA", ""));
+
+        return c;
     }
 
     /**
@@ -298,7 +324,7 @@ public class Add implements Cpu.OpcodeConfiguration {
     }
 
     /**
-     * Implements increment of a register, DEC (af,of,pf,sf,zf  not cf)
+     * Implements increment of a register, INC (af,of,pf,sf,zf  not cf)
      * reg                         01000reg
      */
     public static class IncReg extends Cpu.Opcode {
