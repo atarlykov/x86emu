@@ -1,18 +1,27 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Division opcodes
  */
-public class Division implements Cpu.OpcodeConfiguration {
+public class Division implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration {
 
     /**
      *  DIV unsigned div
      *          1111_011w m110r     disp     disp
+     *      clocks: R8 -> 80..90
+     *              R16 -> 144..162
+     *              M8 -> 88..96 + EA
+     *              M16 -> 150..168 + EA
      *
      *  IDIV signed div
      *          1111_011w m111r     disp     disp
+     *      clocks: R8 ->  101..112
+     *              R16 -> 165..184
+     *              M8 ->  107..118 + EA
+     *              M16 -> 171..190 + EA
      *
      *  AAD updates pf,sf,zf
      *          1101_0101 data8
@@ -31,12 +40,38 @@ public class Division implements Cpu.OpcodeConfiguration {
         );
     }
 
+    @Override
+    public Map<String, Configuration> getClockedConfiguration()
+    {
+        Map<String, Configuration> c = new HashMap<>();
+
+        // DIV
+        config(c, "1111_0110", "**_110_***", S( 92, Div.class, "DIV", "[M8]"));
+        config(c, "1111_0111", "**_110_***", S(159, Div.class, "DIV", "[M16]"));
+
+        config(c, "1111_0110", "11_110_***", S( 85, Div.class, "DIV", "R8"), true);
+        config(c, "1111_0111", "11_110_***", S(153, Div.class, "DIV", "R16"), true);
+
+        // IDIV
+        config(c, "1111_0110", "**_111_***", S(113, Div.class, "IDIV", "[M8]"));
+        config(c, "1111_0111", "**_111_***", S(181, Div.class, "IDIV", "[M16]"));
+
+        config(c, "1111_0110", "11_111_***", S(107, Div.class, "IDIV", "R8"), true);
+        config(c, "1111_0111", "11_111_***", S(175, Div.class, "IDIV", "R16"), true);
+
+        // AAD
+        config(c, "1101_0101",               S( 60, Aad.class, "AAD", ""));
+
+        return c;
+    }
 
     /**
      * Unsigned division
-     *      (ah~reminder, al~quotient) <- ax / source8
-     *      (dx~reminder, ax~quotient) <- dx:ax / source16
-     *      if quotient exceeds 0xFF/0xFFFF (x/0) --> interrupt 0 is generated, q/r undefined
+     *      (ah~reminder, al~quotient) <<- ax / source8
+     *      (dx~reminder, ax~quotient) <<- dx:ax / source16
+     *      if quotient exceeds 0xFF/0xFFFF (x/0) ->>
+     *          - interrupt 0 is generated
+     *          - quotient & reminder are undefined
      *      af,cf,of,pf,sf,zf are undefined
      */
     public static class Div extends Cpu.DemuxedOpcode {

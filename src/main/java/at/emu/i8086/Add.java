@@ -51,20 +51,31 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     {
         Map<String, Configuration> c = new HashMap<>();
 
+        // ADD
         config(c, "0000_000*", "**_***_***", S(16, AddRmR.class, "ADD", "[M] <-  R"));
         config(c, "0000_001*", "**_***_***", S( 9, AddRmR.class, "ADD", " R  <- [M]"));
         config(c, "0000_00**", "11_***_***", S( 3, AddRmR.class, "ADD", " R  <-  R"), true);
 
-        config(c, "0000_010*",               S( 4, AddAccImm.class, "ADD", " A   <- Rm"));
+        config(c, "0000_010*",               S( 4, AddAccImm.class, "ADD", " A   <- I"));
         config(c, "1000_00**", "**_000_***", S(17, AddRmImm.class,  "ADD", "[M]  <- I"));
         config(c, "1000_00**", "11_000_***", S( 4, AddRmImm.class,  "ADD", " Rm  <- I"), true);
 
+        // ADC
+        config(c, "0001_000*", "**_***_***", S(16, AdcRmR.class, "ADC", "[M] <-  R"));
+        config(c, "0001_001*", "**_***_***", S( 9, AdcRmR.class, "ADC", " R  <- [M]"));
+        config(c, "0001_00**", "11_***_***", S( 3, AdcRmR.class, "ADC", " R  <-  R"), true);
 
-        config(c, "0100_0***",               S( 4, IncReg.class, "INC", "R16"));
+        config(c, "0001_010*",               S( 4, AdcAccImm.class, "ADC", " A   <- I"));
+        config(c, "1000_00**", "**_010_***", S(17, AdcRmImm.class,  "ADC", "[M]  <- I"));
+        config(c, "1000_00**", "11_010_***", S( 4, AdcRmImm.class,  "ADC", " Rm  <- I"), true);
+
+        // INC
+        config(c, "0100_0***",               S( 2, IncReg.class, "INC", "R16"));
         config(c, "1111_111*", "**_000_***", S(15, IncReg.class, "INC", "R"));
-        config(c, "1111_1110", "11_000_***", S( 3, IncReg.class, "INC", "R8"));
-        config(c, "1111_1111", "11_000_***", S( 2, IncReg.class, "INC", "R16"));
+        config(c, "1111_1110", "11_000_***", S( 3, IncReg.class, "INC", "R8"), true);
+        config(c, "1111_1111", "11_000_***", S( 2, IncReg.class, "INC", "R16"), true);
 
+        // AAA & DAA
         config(c, "0011_0111",               S( 4, Aaa.class, "AAA", ""));
         config(c, "0010_0111",               S( 4, Daa.class, "DAA", ""));
 
@@ -162,8 +173,7 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Addition reg/mem with reg
-     * Reg/mem with reg to either  000000dw mrr   disp     disp
+     * Addition of reg/mem with reg
      */
     public static class AddRmR extends Cpu.Opcode {
         @Override
@@ -185,8 +195,7 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Addition reg/mem with immediate
-     * imm to reg/mem              100000sw m000r disp     disp    data   data(if s:w=01)
+     * Addition of reg/mem with immediate
      */
     public static class AddRmImm extends Cpu.DemuxedOpcode {
         @Override
@@ -210,8 +219,7 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Addition reg/mem with immediate
-     * imm to accum                0000010w data  data(w=1)
+     * Addition of accumulator with immediate
      */
     public static class AddAccImm extends Cpu.Opcode {
         @Override
@@ -233,8 +241,7 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Addition reg/mem with reg
-     * Reg/mem with reg to either  000100dw mrr   disp     disp
+     * Addition of reg/mem with reg
      */
     public static class AdcRmR extends Cpu.Opcode {
         @Override
@@ -257,8 +264,7 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Addition reg/mem with immediate
-     * imm to reg/mem              100000sw m010r disp     disp    data   data(if s:w=01)
+     * Addition of reg/mem with immediate
      */
     public static class AdcRmImm extends Cpu.DemuxedOpcode {
         @Override
@@ -283,8 +289,7 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Addition reg/mem with immediate
-     * imm to accum                0001010w data  data(w=1)
+     * Addition of accumulator with immediate
      */
     public static class AdcAccImm extends Cpu.Opcode {
         @Override
@@ -309,8 +314,8 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Implements increment of a reg/mem, INC (af,of,pf,sf,zf  not cf)
-     * reg/mem                     1111111w m000r disp     disp
+     * Implements increment of a reg/mem
+     * flags updated (af,of,pf,sf,zf  not cf)
      */
     public static class IncRm extends Cpu.DemuxedOpcode {
         @Override
@@ -324,8 +329,8 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * Implements increment of a register, INC (af,of,pf,sf,zf  not cf)
-     * reg                         01000reg
+     * Implements increment of a register
+     * flags updated (af,of,pf,sf,zf  not cf)
      */
     public static class IncReg extends Cpu.Opcode {
         @Override
@@ -337,7 +342,8 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
     }
 
     /**
-     * AAA (af, cf) others=undef      00110111  // AL <- valid unpacked decimal number &0x0F
+     * AAA (AL <- valid unpacked decimal number &0x0F)
+     * flags updated (af, cf) [others=undef]
      */
     public static class Aaa extends Cpu.Opcode {
         @Override
@@ -358,7 +364,8 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
         }
     }
     /**
-     *  DAA (af,cf,pf,sf,zf, of=undef) 00100111  // AL <- pair of valid packed decimal
+     *  DAA (AL <- pair of valid packed decimal)
+     *  flags updated (af,cf,pf,sf,zf, of=undef)
      */
     public static class Daa extends Cpu.Opcode {
         @Override

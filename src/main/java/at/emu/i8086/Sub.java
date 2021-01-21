@@ -1,11 +1,12 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Implementation of subtraction opcodes
  */
-public class Sub implements Cpu.OpcodeConfiguration
+public class Sub implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration
 {
     /**
      * Based on i8086 manual:
@@ -48,6 +49,46 @@ public class Sub implements Cpu.OpcodeConfiguration
                 "0011_1111", Aas.class,
                 "0010_1111", Das.class
         );
+    }
+
+    @Override
+    public Map<String, Configuration> getClockedConfiguration()
+    {
+        Map<String, Configuration> c = new HashMap<>();
+
+        // SUB
+        config(c, "0010_100*", "**_***_***", S(16, SubRmR.class, "SUB", "[M] <-  R"));
+        config(c, "0010_101*", "**_***_***", S( 9, SubRmR.class, "SUB", " R  <- [M]"));
+        config(c, "0010_10**", "11_***_***", S( 3, SubRmR.class, "SUB", " R  <-  R"), true);
+
+        config(c, "0010_110*",               S( 4, SubAccImm.class, "SUB", " A   <- I"));
+        config(c, "1000_00**", "**_101_***", S(17, SubRmImm.class,  "SUB", "[M]  <- I"));
+        config(c, "1000_00**", "11_101_***", S( 4, SubRmImm.class,  "SUB", " Rm  <- I"), true);
+
+        // SBB
+        config(c, "0001_100*", "**_***_***", S(16, SbbRmR.class, "SBB", "[M] <-  R"));
+        config(c, "0001_101*", "**_***_***", S( 9, SbbRmR.class, "SBB", " R  <- [M]"));
+        config(c, "0001_10**", "11_***_***", S( 3, SbbRmR.class, "SBB", " R  <-  R"), true);
+
+        config(c, "0001_110*",               S( 4, SbbAccImm.class, "SBB", " A   <- I"));
+        config(c, "1000_00**", "**_011_***", S(17, SbbRmImm.class,  "SBB", "[M]  <- I"));
+        config(c, "1000_00**", "11_011_***", S( 4, SbbRmImm.class,  "SBB", " Rm  <- I"), true);
+
+        // DEC
+        config(c, "0100_1***",               S( 2, DecReg.class, "DEC", "R16"));
+        config(c, "1111_111*", "**_001_***", S(15, DecReg.class, "DEC", "R"));
+        config(c, "1111_1110", "11_001_***", S( 3, DecReg.class, "DEC", "R8"), true);
+        config(c, "1111_1111", "11_001_***", S( 2, DecReg.class, "DEC", "R16"), true);
+
+        // AAS & DAS
+        config(c, "0011_1111",               S( 4, Aas.class, "AAS", ""));
+        config(c, "0010_1111",               S( 4, Das.class, "DAS", ""));
+
+        // NEG
+        config(c, "1111_011*", "**_011_***", S(16, DecReg.class, "NEG", "[M]"));
+        config(c, "1111_011*", "11_011_***", S( 3, DecReg.class, "NEG", "R"), true);
+
+        return c;
     }
 
     /**
@@ -197,7 +238,6 @@ public class Sub implements Cpu.OpcodeConfiguration
 
     /**
      * Implements subtraction of imm from accumulator
-     * imm from accum              0010110w data  data(w=1)   [(ax|al) - imm]
      */
     public static class SubAccImm extends Cpu.Opcode {
         @Override
@@ -288,7 +328,6 @@ public class Sub implements Cpu.OpcodeConfiguration
 
     /**
      * Implements sbb subtraction of imm from accumulator
-     * imm from accum              0010110w data  data(w=1)   [(ax|al) - imm]
      */
     public static class SbbAccImm extends Cpu.Opcode {
         @Override
@@ -321,8 +360,8 @@ public class Sub implements Cpu.OpcodeConfiguration
     }
 
     /**
-     * Implements decrement of a reg/mem, DEC (af,of,pf,sf,zf  not cf)
-     * reg/mem                     1111111w m001r disp     disp
+     * Implements decrement of a reg/mem
+     * flags updated (af,of,pf,sf,zf  not cf)
      */
     public static class DecRm extends Cpu.DemuxedOpcode {
         @Override
@@ -338,8 +377,8 @@ public class Sub implements Cpu.OpcodeConfiguration
     }
 
     /**
-     * Implements decrement of a register, DEC (af,of,pf,sf,zf  not cf)
-     * reg                         01001reg
+     * Implements decrement of a register
+     * flags updates (af,of,pf,sf,zf  not cf)
      */
     public static class DecReg extends Cpu.Opcode {
         @Override
@@ -352,10 +391,18 @@ public class Sub implements Cpu.OpcodeConfiguration
     }
 
     /**
-     * Implements negation as dst <- 0-dst
-     * NEG (af,cf,of,pf,sf,zf), dst <- 0-dst:  0->0, -128->-128 OF, -32768->-32768 OF, CF always except dst==0 - reset CF
-     * <p>
-     * change sign                 1111011w m011r disp     disp
+     * Implements negation as dst <<- (0 - dst)
+     * flags updated (af,cf,of,pf,sf,zf)
+     *
+     * cases:
+     *   0      -> 0
+     *   -128   -> -128, OF set
+     *   -32768 -> -32768, OF set
+     *
+     * if dst == 0
+     *      reset CF
+     * else
+     *      set CF
      */
     public static class NegRm extends Cpu.DemuxedOpcode {
         @Override
@@ -382,7 +429,8 @@ public class Sub implements Cpu.OpcodeConfiguration
 
 
     /**
-     * AAA (af, cf) others=undef      00110111  // AL <- valid unpacked decimal number &0x0F
+     * AAS  (AL <- valid unpacked decimal number &0x0F)
+     * flags updated (af, cf) [others ->> undef]
      */
     public static class Aas extends Cpu.Opcode {
         @Override
@@ -403,7 +451,8 @@ public class Sub implements Cpu.OpcodeConfiguration
         }
     }
     /**
-     *  DAA (af,cf,pf,sf,zf, of=undef) 00100111  // AL <- pair of valid packed decimal
+     *  DAA (AL <- pair of valid packed decimal)
+     *  flags updated (af,cf,pf,sf,zf, of=undef)
      */
     public static class Das extends Cpu.Opcode {
         @Override

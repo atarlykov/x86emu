@@ -1,15 +1,20 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Compare instructions
  */
-public class Cmp implements Cpu.OpcodeConfiguration {
-    // CMP
-    //    Reg/mem and reg       001110dw mrr    disp disp
-    //    Imm with reg/mem      100000sw m111r  disp disp data data(s:w=01) // sw==11 --> data8 sign extended to data16
-    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
+public class Cmp implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration
+{
+    /*
+     *  CMP
+     *      Reg/mem and reg       001110dw mrr      disp    disp
+     *      Imm with reg/mem      100000sw m111r    disp    disp data data(s:w=01) // sw==11 --> data8 sign extended to data16
+     *      Imm wth accumulator   0011110w data     data(w=1) // error in intel manual @p4-24 table 4-12
+     *
+     */
 
     /**
      * @return configuration of opcodes
@@ -23,9 +28,32 @@ public class Cmp implements Cpu.OpcodeConfiguration {
         );
     }
 
-    //    Reg/mem and reg       001110dw mrr    disp disp
-    public static class CmpRmR extends Cpu.Opcode {
-        public void execute(Cpu cpu, int opcode) {
+    @Override
+    public Map<String, Configuration> getClockedConfiguration()
+    {
+        Map<String, Configuration> c = new HashMap<>();
+
+        // CMP
+        config(c, "0011_100*", "**_***_***", S( 9, CmpRmR.class, "CMP", "[M] <-  R"));
+        config(c, "0011_101*", "**_***_***", S( 9, CmpRmR.class, "CMP", " R  <- [M]"));
+        config(c, "0011_10**", "11_***_***", S( 3, CmpRmR.class, "CMP", " R  <-  R"), true);
+
+        config(c, "0011_110*",               S( 4, CmpAccImm.class, "CMP", " A   <- I"));
+        config(c, "1000_00**", "**_111_***", S(10, CmpRmImm.class,  "CMP", "[M]  <- I"));
+        config(c, "1000_00**", "11_111_***", S( 4, CmpRmImm.class,  "CMP", " Rm  <- I"), true);
+
+        return c;
+    }
+
+
+
+    /**
+     *  RegMem with Reg
+     */
+    public static class CmpRmR extends Cpu.Opcode
+    {
+        public void execute(Cpu cpu, int opcode)
+        {
             cpu.readModRegRm(opcode);
             boolean w = (opcode & 0b0000_0001) == 1;
             boolean d = (opcode & 0b0000_0010) == 0b10;
@@ -41,11 +69,12 @@ public class Cmp implements Cpu.OpcodeConfiguration {
     }
 
 
-    //    Imm with reg/mem      100000sw m111r  disp disp data data(s:w=01) // (s:w=11) --> data8 sign extend to data16
-    // 00 - 8/8 8
-    // 01 - 16/16 16
-    // 10 - 8/8 8
-    // 11 - 16/16 8sx
+
+    /**
+     *
+     * Imm with RegMem
+     * (s:w=11) ->> data8 sign extend to data16
+     */
     public static class CmpRmImm extends Cpu.DemuxedOpcode {
         @Override
         public void demuxed(Cpu cpu, int opcode) {
@@ -67,7 +96,9 @@ public class Cmp implements Cpu.OpcodeConfiguration {
     }
 
 
-    //    Imm wth accumulator   0011110w data data(w=1) // error in intel manual @p4-24 table 4-12
+    /**
+     * Imm wth Accumulator
+     */
     public static class CmpAccImm extends Cpu.Opcode {
         @Override
         public void execute(Cpu cpu, int opcode) {
