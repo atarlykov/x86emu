@@ -53,11 +53,11 @@ public class Division implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfi
         config(c, "1111_0111", "11_110_***", S(153, Div.class, "DIV", "R16"), true);
 
         // IDIV
-        config(c, "1111_0110", "**_111_***", S(113, Div.class, "IDIV", "[M8]"));
-        config(c, "1111_0111", "**_111_***", S(181, Div.class, "IDIV", "[M16]"));
+        config(c, "1111_0110", "**_111_***", S(113, Idiv.class, "IDIV", "[M8]"));
+        config(c, "1111_0111", "**_111_***", S(181, Idiv.class, "IDIV", "[M16]"));
 
-        config(c, "1111_0110", "11_111_***", S(107, Div.class, "IDIV", "R8"), true);
-        config(c, "1111_0111", "11_111_***", S(175, Div.class, "IDIV", "R16"), true);
+        config(c, "1111_0110", "11_111_***", S(107, Idiv.class, "IDIV", "R8"), true);
+        config(c, "1111_0111", "11_111_***", S(175, Idiv.class, "IDIV", "R16"), true);
 
         // AAD
         config(c, "1101_0101",               S( 60, Aad.class, "AAD", ""));

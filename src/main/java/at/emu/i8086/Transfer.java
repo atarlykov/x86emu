@@ -77,10 +77,10 @@ public class Transfer implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfi
         config(c, "1000_101*", "**_***_***", S( 8, MovRmR.class, "MOV", " R  <- [M]"));
         config(c, "1000_10**", "11_***_***", S( 2, MovRmR.class, "MOV", " R  <-  R"), true);
 
-        config(c, "1100_0110", "**_000_***", S(10, MovRegImm.class, "MOV", "[M8] <- I8"));
-        config(c, "1100_0110", "11_000_***", S( 4, MovRegImm.class, "MOV", "R8mr <- I8"), true);
-        config(c, "1100_0111", "**_000_***", S(10, MovRegImm.class, "MOV", "[M16] <- I16"));
-        config(c, "1100_0111", "11_000_***", S( 4, MovRegImm.class, "MOV", "R16mr <- I16"), true);
+        config(c, "1100_0110", "**_000_***", S(10, MovRmImm.class, "MOV", "[M8] <- I8"));
+        config(c, "1100_0110", "11_000_***", S( 4, MovRmImm.class, "MOV", "R8mr <- I8"), true);
+        config(c, "1100_0111", "**_000_***", S(10, MovRmImm.class, "MOV", "[M16] <- I16"));
+        config(c, "1100_0111", "11_000_***", S( 4, MovRmImm.class, "MOV", "R16mr <- I16"), true);
         config(c, "1011_****",               S( 4, MovRegImm.class, "MOV", "R* <- IMM*"));
 
         config(c, "1010_00**",               S(10, MovAccMem.class, "MOV", "A <-> [M]"));

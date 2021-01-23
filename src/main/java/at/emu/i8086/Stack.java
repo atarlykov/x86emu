@@ -1,22 +1,26 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Stack operations opcodes
  */
-public class Stack implements Cpu.OpcodeConfiguration {
-    // Push
-    //  Reg/mem     1111_1111   m110r   disp-lo disp-hi
-    //  register    0101_0reg
-    //  Segment reg 000reg110
-    // Pop
-    //  Reg/mem     1000_1111   m000r   disp-lo disp-hi
-    //  register    0101_1reg
-    //  Segment reg 000reg111   / except for 0000_1111
-    //
-    // Pushf        1001_1100
-    // Popf         1001_1101
+public class Stack implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration
+{
+    /*
+     Push
+      Reg/mem     1111_1111   m110r   disp-lo disp-hi
+      register    0101_0reg
+      Segment reg 000reg110
+     Pop
+      Reg/mem     1000_1111   m000r   disp-lo disp-hi
+      register    0101_1reg
+      Segment reg 000reg111   / except for 0000_1111
+
+     Pushf        1001_1100
+     Popf         1001_1101
+    */
     @Override
     public Map<String, ?> getConfiguration() {
         return Map.of(
@@ -31,6 +35,29 @@ public class Stack implements Cpu.OpcodeConfiguration {
                 "1001_1100", Pushf.class,
                 "1001_1101", Popf.class
         );
+    }
+
+    @Override
+    public Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> getClockedConfiguration()
+    {
+        Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> c = new HashMap<>();
+
+        config(c, "0101_0***", S(11, PushReg.class,  "PUSH", "R"));
+        config(c, "0101_1***", S( 8, PopReg.class,  "POP", "R"));
+
+        config(c, "1111_1111", "**_110_***", S(16, PushRm.class,  "PUSH", "[M]"));
+        config(c, "1111_1111", "11_110_***", S(11, PushRm.class,  "PUSH", "R"), true);
+        config(c, "1000_1111", "**_000_***", S(17, PopRm.class,  "POP", "[M]"));
+        config(c, "1000_1111", "11_000_***", S( 8, PopRm.class,  "POP", "R"), true);
+
+        config(c, "000*_*110", S(10, PushSReg.class,  "PUSH", "S"));
+        config(c, "000*_0111", S( 8, PopSReg.class,  "POP", "S"));
+        config(c, "0001_1111", S( 8, PopSReg.class,  "POP", "S"));
+
+        config(c, "1001_1100", S(10, Pushf.class,  "PUSH", "F"));
+        config(c, "1001_1101", S( 8, Popf.class,  "POP", "F"));
+
+        return c;
     }
 
     public static class PushRm extends Cpu.DemuxedOpcode {

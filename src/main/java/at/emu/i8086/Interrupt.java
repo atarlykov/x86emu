@@ -1,11 +1,12 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Interrupts related opcodes
  */
-public class Interrupt implements Cpu.OpcodeConfiguration
+public class Interrupt implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration
 {
     /**
      * INT
@@ -35,6 +36,19 @@ public class Interrupt implements Cpu.OpcodeConfiguration
                 "1100_1110", Into.class,
                 "1100_1111", Iret.class
         );
+    }
+
+    @Override
+    public Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> getClockedConfiguration()
+    {
+        Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> c = new HashMap<>();
+
+        config(c, "1100_1101", S( 52, Int.class, "INT", ""));
+        config(c, "1100_1100", S( 51, Int3.class, "INT", "3"));
+        config(c, "1100_1110", S( 53, 4, Into.class, "INTO", ""));
+        config(c, "1100_1111", S( 24, Iret.class, "IRET", ""));
+
+        return c;
     }
 
     /**

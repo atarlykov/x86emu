@@ -1451,8 +1451,53 @@ public class Cpu
          * implements configuration for any target opcode,
          * one byte or with mrr part
          */
-        class SimpleConfiguration implements Configuration {
+        class SimpleConfiguration implements Configuration
+        {
+            /**
+             * defines types to support different
+             * schemes for clocks calculation
+             */
+            enum Type {
+                /**
+                 * just one fixed clock
+                 */
+                SIMPLE,
+                /**
+                 * conditional type, 2 clocks - true and false cases
+                 */
+                COND,
+                /**
+                 * string operations with REP prefix, 3 clocks
+                 */
+                REP,
+                /**
+                 * cl based operations (shifts), 2 clocks
+                 */
+                CL
+            }
+
+            /**
+             * type of the configuration
+             */
+            Type type = Type.SIMPLE;
+
+            /**
+             * Typical cpu clocks to execute an instruction assuming it has been already
+             * prefetched to instruction queue, doesn't include mod/reg/mr EA calculation.
+             * Number of clocks for conditional instructions when base condition is true.
+             */
             int     clocks;
+            /**
+             * Alternate clocks:
+             * - for conditional instructions: clocks when base condition is false.
+             * - for bit shifts: clocks multiplier for CL
+             * - for rep [string]: base clocks
+             */
+            int     clocksAlt;
+            /**
+             * - for rep [string]: per iteration multiplier
+             */
+            int     clocksAlt2;
             Class<? extends Opcode> opClass;
             String  mnemonic;
         }
@@ -1467,14 +1512,69 @@ public class Cpu
         /**
          * service DSL method to simplify configurations
          * @param clocks number of clock
+         * @param clocksAlt number of clock for conditional instructions with failed condition
          * @param opClass class that implements the opcode
          * @param mnemonic mnemonic
+         * @param comment comment, could be used later
          * @return descriptor
          */
-        default SimpleConfiguration S(int clocks, Class<? extends Cpu.Opcode> opClass, String mnemonic)
+        default SimpleConfiguration S(int clocks, int clocksAlt, Class<? extends Cpu.Opcode> opClass, String mnemonic, String comment)
+        {
+            SimpleConfiguration config = R(clocks, clocksAlt, 0, opClass, mnemonic, comment);
+            config.type = SimpleConfiguration.Type.SIMPLE;
+            return config;
+        }
+
+        /**
+         * service DSL method to simplify configurations of conditional clocks
+         * @param clocks number of clock in case of success check
+         * @param clocksAlt number of clock for conditional instructions with failed condition
+         * @param opClass class that implements the opcode
+         * @param mnemonic mnemonic
+         * @param comment comment, could be used later
+         * @return descriptor
+         */
+        default SimpleConfiguration J(int clocks, int clocksAlt, Class<? extends Cpu.Opcode> opClass, String mnemonic, String comment)
+        {
+            SimpleConfiguration config = R(clocks, clocksAlt, 0, opClass, mnemonic, comment);
+            config.type = SimpleConfiguration.Type.COND;
+            return config;
+        }
+
+        /**
+         * service DSL method to simplify CL based configurations
+         * @param clocks base number of clocks
+         * @param clocksAlt number of clock per bit
+         * @param opClass class that implements the opcode
+         * @param mnemonic mnemonic
+         * @param comment comment, could be used later
+         * @return descriptor
+         */
+        default SimpleConfiguration C(int clocks, int clocksAlt, Class<? extends Cpu.Opcode> opClass, String mnemonic, String comment)
+        {
+            SimpleConfiguration config = R(clocks, clocksAlt, 0, opClass, mnemonic, comment);
+            config.type = SimpleConfiguration.Type.CL;
+            return config;
+        }
+
+
+        /**
+         * service DSL method to simplify configurations or REP type
+         * @param clocks number of clocks
+         * @param clocksAlt alternate clocks
+         * @param clocksAlt2 alternate2 clocks
+         * @param opClass class that implements the opcode
+         * @param mnemonic mnemonic
+         * @param comment comment, could be used later
+         * @return descriptor
+         */
+        default SimpleConfiguration R(int clocks, int clocksAlt, int clocksAlt2, Class<? extends Cpu.Opcode> opClass, String mnemonic, String comment)
         {
             SimpleConfiguration c = new SimpleConfiguration();
+            c.type = SimpleConfiguration.Type.REP;
             c.clocks = clocks;
+            c.clocksAlt = clocksAlt;
+            c.clocksAlt2 = clocksAlt2;
             c.opClass = opClass;
             c.mnemonic = mnemonic;
             return c;
@@ -1490,7 +1590,7 @@ public class Cpu
          */
         default SimpleConfiguration S(int clocks, Class<? extends Cpu.Opcode> opClass, String mnemonic, String comment)
         {
-            return S(clocks, opClass, mnemonic);
+            return S(clocks, 0, opClass, mnemonic, comment);
         }
 
         /**
@@ -1597,23 +1697,31 @@ public class Cpu
          * @param dst destination configuration
          * @param src source configuration
          */
-        default void merge(Map<String, Configuration> dst, Map<String, Configuration> src)
+        static void merge(Map<String, Configuration> dst, Map<String, Configuration> src)
         {
-            src.forEach( (srcOpcode, srcCconfig) -> {
+            src.forEach( (srcOpcode, srcConfig) -> {
                 Configuration dstConfig = dst.get(srcOpcode);
                 if (dstConfig == null) {
-                    dst.put(srcOpcode, srcCconfig);
+                    dst.put(srcOpcode, srcConfig);
                 }
                 else if (dstConfig instanceof SimpleConfiguration) {
                     throw new RuntimeException("error merging configurations for " + srcOpcode + " opcode");
                 } else {
                     ModRegRmConfiguration dstMrrConfig = (ModRegRmConfiguration) dstConfig;
-                    if (!(srcCconfig instanceof ModRegRmConfiguration)) {
+                    if ((srcConfig instanceof SimpleConfiguration)) {
+                        SimpleConfiguration srcSimpleConfig = (SimpleConfiguration) srcConfig;
+                        throw new RuntimeException("can't merge simple config into modregmod one for " + srcOpcode + " opcode ("
+                                + srcSimpleConfig.clocks + ", " + srcSimpleConfig.opClass.getSimpleName() + ")");
+                    }
+                    if (!(srcConfig instanceof ModRegRmConfiguration)) {
                         throw new RuntimeException("can't merge simple config into modregmod one for " + srcOpcode + " opcode");
                     }
-                    ((ModRegRmConfiguration) srcCconfig).mrr.forEach((srcMrr, srcMrrConfig) -> {
+                    ((ModRegRmConfiguration) srcConfig).mrr.forEach((srcMrr, srcMrrConfig) -> {
                         if (dstMrrConfig.mrr.containsKey(srcMrr)) {
-                            throw new RuntimeException("can't merge modregmod configuration for [" + srcOpcode + ", " + srcMrr + "] opcode");
+                            SimpleConfiguration dstMrrRegistered = dstMrrConfig.mrr.get(srcMrr);
+                            throw new RuntimeException("can't merge modregmod configuration for [" + srcOpcode + ", " + srcMrr + "] opcode,\n" +
+                                    "registration (" + srcMrrConfig.clocks + ", "+ srcMrrConfig.opClass.getSimpleName() + ") clashes with registered " +
+                                    "(" + dstMrrRegistered.clocks + ", " + dstMrrRegistered.opClass.getSimpleName() + ")");
                         }
                         dstMrrConfig.mrr.put(srcMrr, srcMrrConfig);
                     });

@@ -6,7 +6,7 @@ import java.util.Map;
 /**
  * Implementation of jump opcodes
  */
-public class Jmp implements Cpu.OpcodeConfiguration
+public class Jmp implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration
 {
     /**
      *   CALL  inc ip, than save to stack [p2-44,59]
@@ -100,6 +100,55 @@ public class Jmp implements Cpu.OpcodeConfiguration
         return tmp;
     }
 
+    @Override
+    public Map<String, Configuration> getClockedConfiguration()
+    {
+        Map<String, Configuration> c = new HashMap<>();
+
+        config(c, "1110_10*1",               S(15, 0, JmpInSeg.class,           "JMP", "I16"));
+        config(c, "1110_1010",               S(15, 0, JmpInterSeg.class,        "JMP", "I32"));
+        config(c, "1111_1111", "**_100_***", S(18, 0, JmpInSegIndirect.class,   "JMP", "[M]"));
+        config(c, "1111_1111", "11_100_***", S(11, 0, JmpInSegIndirect.class,   "JMP", "[R]"), true);
+        config(c, "1111_1111", "**_101_***", S(24, 0, JmpInterSegIndirect.class,"JMP", "[M32]"));
+
+        config(c, "1110_1000",               S(19, 0, CallDirectInSegment.class,    "CALL", "NEAR"));
+        config(c, "1001_1010",               S(28, 0, CallDirectInterSegment.class, "CALL", "FAR"));
+        config(c, "1111_1111", "**_010_***", S(21, 0, CallIndirectInSegment.class,  "CALL", "[M]"));
+        config(c, "1111_1111", "11_010_***", S(16, 0, CallIndirectInSegment.class,  "CALL", "[R]"), true);
+        config(c, "1111_1111", "**_011_***", S(37, 0, CallIndirectInterSegment.class, "CALL", "[M32]"));
+
+        config(c, "1100_0011",               S( 8, 0, RetInSegment.class,         "RET", ""));
+        config(c, "1100_0010",               S(12, 0, RetInSegmentImm.class,      "RET", "I16"));
+        config(c, "1100_1011",               S(18, 0, RetInterSegment.class,      "RET", ""));
+        config(c, "1100_1010",               S(17, 0, RetInterSegmentImm.class,   "RET", "I16"));
+
+
+        config(c, "0111_0011", J(16, 4, JaeJnbJnc.class,    "JNC", ""));
+        config(c, "0111_0111", J(16, 4, JaJnbe.class,       "JA", ""));
+        config(c, "0111_0010", J(16, 4, JbJnaeJc.class,     "JB", ""));
+        config(c, "0111_0110", J(16, 4, JbeJna.class,       "JBE", ""));
+        config(c, "0111_0100", J(16, 4, JeJz.class,         "JZ", ""));
+        config(c, "0111_1111", J(16, 4, JgJnle.class,       "JG", ""));
+        config(c, "0111_1101", J(16, 4, JgeJnl.class,       "JGE", ""));
+        config(c, "0111_1100", J(16, 4, JlJnge.class,       "JL", ""));
+        config(c, "0111_1110", J(16, 4, JleJng.class,       "JLE", ""));
+        config(c, "0111_0101", J(16, 4, JneJnz.class,       "JNZ", ""));
+        config(c, "0111_0001", J(16, 4, Jno.class,          "JNO", ""));
+        config(c, "0111_1011", J(16, 4, JnpJpo.class,       "JNP", ""));
+        config(c, "0111_1001", J(16, 4, Jns.class,          "JNS", ""));
+        config(c, "0111_0000", J(16, 4, Jo.class,           "JO", ""));
+        config(c, "0111_1010", J(16, 4, JpJpe.class,        "JP", ""));
+        config(c, "0111_1000", J(16, 4, Js.class,           "JS", ""));
+
+        config(c, "1110_0010", J(17, 5, Loop.class,         "LOOP", ""));
+        config(c, "1110_0001", J(18, 6, LoopeLoopz.class,   "LOOPZ", ""));
+        config(c, "1110_0000", J(19, 5, LoopneLoopnz.class, "LOOPNZ", ""));
+        config(c, "1110_0011", J(18, 8, Jcxz.class,         "JCXZ", ""));
+
+        return c;
+    }
+
+
     /**
      * Direct jump inside segment
      * direct with segment         1110_1001   ip-inc-lo   op-inc-hi                   // near label  +/-32k
@@ -157,9 +206,6 @@ public class Jmp implements Cpu.OpcodeConfiguration
             // depends on mode, it's [reg] or [displacement]
             cpu.segments[Cpu.CS] = cpu.mread16(cpu.mrrModEA + 2);
             cpu.ip = cpu.mrrModValue;
-
-            // todo: reg vs [reg], displacement vs [displacement]
-            throw new RuntimeException("todo: reg vs [reg], displacement vs [displacement]");
         }
     }
 

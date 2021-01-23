@@ -1,11 +1,12 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Multiplication opcodes
  */
-public class Multiplication implements Cpu.OpcodeConfiguration {
+public class Multiplication implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration {
 
     /**
      * Multiplications
@@ -32,6 +33,31 @@ public class Multiplication implements Cpu.OpcodeConfiguration {
                 ),
                 "1101_0100", Aam.class
         );
+    }
+
+    @Override
+    public Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> getClockedConfiguration()
+    {
+        Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> c = new HashMap<>();
+
+        // MUL
+        config(c, "1111_0110", "**_100_***", S( 80, Mul.class, "MUL", "[M8]"));
+        config(c, "1111_0111", "**_100_***", S(132, Mul.class, "MUL", "[M16]"));
+
+        config(c, "1111_0110", "11_100_***", S( 74, Mul.class, "MUL", "R8"), true);
+        config(c, "1111_0111", "11_100_***", S(126, Mul.class, "MUL", "R16"), true);
+
+        // IMUL
+        config(c, "1111_0110", "**_101_***", S( 95, Imul.class, "IMUL", "[M8]"));
+        config(c, "1111_0111", "**_101_***", S(148, Imul.class, "IMUL", "[M16]"));
+
+        config(c, "1111_0110", "11_101_***", S( 89, Imul.class, "IMUL", "R8"), true);
+        config(c, "1111_0111", "11_101_***", S(141, Imul.class, "IMUL", "R16"), true);
+
+        // AAM
+        config(c, "1101_0100",               S( 83, Aam.class, "AAM", ""));
+
+        return c;
     }
 
     /**

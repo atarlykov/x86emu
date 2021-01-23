@@ -71,9 +71,9 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
 
         // INC
         config(c, "0100_0***",               S( 2, IncReg.class, "INC", "R16"));
-        config(c, "1111_111*", "**_000_***", S(15, IncReg.class, "INC", "R"));
-        config(c, "1111_1110", "11_000_***", S( 3, IncReg.class, "INC", "R8"), true);
-        config(c, "1111_1111", "11_000_***", S( 2, IncReg.class, "INC", "R16"), true);
+        config(c, "1111_111*", "**_000_***", S(15, IncRm.class, "INC", "R"));
+        config(c, "1111_1110", "11_000_***", S( 3, IncRm.class, "INC", "R8"), true);
+        config(c, "1111_1111", "11_000_***", S( 2, IncRm.class, "INC", "R16"), true);
 
         // AAA & DAA
         config(c, "0011_0111",               S( 4, Aaa.class, "AAA", ""));

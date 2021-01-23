@@ -76,17 +76,17 @@ public class Sub implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
 
         // DEC
         config(c, "0100_1***",               S( 2, DecReg.class, "DEC", "R16"));
-        config(c, "1111_111*", "**_001_***", S(15, DecReg.class, "DEC", "R"));
-        config(c, "1111_1110", "11_001_***", S( 3, DecReg.class, "DEC", "R8"), true);
-        config(c, "1111_1111", "11_001_***", S( 2, DecReg.class, "DEC", "R16"), true);
+        config(c, "1111_111*", "**_001_***", S(15, DecRm.class, "DEC", "R"));
+        config(c, "1111_1110", "11_001_***", S( 3, DecRm.class, "DEC", "R8"), true);
+        config(c, "1111_1111", "11_001_***", S( 2, DecRm.class, "DEC", "R16"), true);
 
         // AAS & DAS
         config(c, "0011_1111",               S( 4, Aas.class, "AAS", ""));
         config(c, "0010_1111",               S( 4, Das.class, "DAS", ""));
 
         // NEG
-        config(c, "1111_011*", "**_011_***", S(16, DecReg.class, "NEG", "[M]"));
-        config(c, "1111_011*", "11_011_***", S( 3, DecReg.class, "NEG", "R"), true);
+        config(c, "1111_011*", "**_011_***", S(16, NegRm.class, "NEG", "[M]"));
+        config(c, "1111_011*", "11_011_***", S( 3, NegRm.class, "NEG", "R"), true);
 
         return c;
     }

@@ -1,12 +1,13 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * port io opcodes, integration with external devices
  * via port io
  */
-public class Ports implements Cpu.OpcodeConfiguration {
+public class Ports implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration {
 
     /**
      * IN
@@ -26,6 +27,19 @@ public class Ports implements Cpu.OpcodeConfiguration {
                 "1110_011*", OutImm.class,
                 "1110_111*", OutDx.class
         );
+    }
+
+    @Override
+    public Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> getClockedConfiguration()
+    {
+        Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> c = new HashMap<>();
+
+        config(c, "1110_010*", S(10, InImm.class,  "IN", "I"));
+        config(c, "1110_110*", S( 8, InDx.class,   "IN", "DX"));
+        config(c, "1110_011*", S(10, OutImm.class, "OUT", "I"));
+        config(c, "1110_111*", S( 8, OutDx.class,  "OUT", "DX"));
+
+        return c;
     }
 
     public static class InImm extends Cpu.Opcode {

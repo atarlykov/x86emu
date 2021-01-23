@@ -1,9 +1,10 @@
 package at.emu.i8086;
 
+import java.util.HashMap;
 import java.util.Map;
 
-public class Strings implements Cpu.OpcodeConfiguration {
-    /**
+public class Strings implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration {
+    /*
      * String manipulations
      *  REP                 1111_001z  (REPE/REPZ,  REPNE/REPNZ)
      *
@@ -35,6 +36,21 @@ public class Strings implements Cpu.OpcodeConfiguration {
         );
     }
 
+    @Override
+    public Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> getClockedConfiguration()
+    {
+        Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> c = new HashMap<>();
+
+        config(c, "1010_010*", R(18, 9, 17, Movs.class,  "MOVS", ""));
+        config(c, "1010_011*", R(22, 9, 22, Cmps.class,  "CMPS", ""));
+        config(c, "1010_111*", R(15, 9, 15, Scas.class,  "SCAS", ""));
+        config(c, "1010_110*", R(12, 9, 13, Lods.class,  "LODS", ""));
+        config(c, "1010_101*", R(11, 9, 10, Stos.class,  "STOS", ""));
+
+        config(c, "1111_001*", S( 2, Rep.class,  "REP", ""));
+
+        return c;
+    }
 
     /**
      * Moves word/byte from DS:SI to ES:DI (DS could be overridden)

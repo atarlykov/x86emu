@@ -6,7 +6,7 @@ import java.util.Map;
 /**
  * Flag register manipulation opcodes
  */
-public class Control implements Cpu.OpcodeConfiguration {
+public class Control implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfiguration {
 
     @Override
     public Map<String, ?> getConfiguration()
@@ -31,6 +31,43 @@ public class Control implements Cpu.OpcodeConfiguration {
                 "001*_*110", Segment.class
         ));
         return tmp;
+    }
+
+    @Override
+    public Map<String, Configuration> getClockedConfiguration()
+    {
+        Map<String, Configuration> c = new HashMap<>();
+
+        config(c, "1111_1000",  S( 2, Clc.class, "CLC", ""));
+        config(c, "1111_0101",  S( 2, Cmc.class, "CMC", ""));
+        config(c, "1111_1001",  S( 2, Stc.class, "STC", ""));
+        config(c, "1111_1100",  S( 2, Cld.class, "CLD", ""));
+        config(c, "1111_1101",  S( 2, Std.class, "STD", ""));
+        config(c, "1111_1010",  S( 2, Cli.class, "CLI", ""));
+        config(c, "1111_1011",  S( 2, Sti.class, "STI", ""));
+        config(c, "1001_1111",  S( 4, Lahf.class, "LAHF", ""));
+        config(c, "1001_1110",  S( 4, Sahf.class, "SAHF", ""));
+
+        config(c, "1111_0100",  S( 1, Hlt.class, "HLT", ""));
+        config(c, "1001_1011",  S( 4, Wait.class, "WAIT", ""));
+
+        /**
+         * mod=11 --> nop ??
+         * mem op --> read
+         */
+        config(c, "1101_1***",  "********", S( 8, Esc.class, "ESC", ""));  // displacement
+        config(c, "1101_1000",  "**000***", S( 2, Esc.class, "ESC", ""), true);  // no displacement
+        config(c, "1101_1111",  "**111***", S( 2, Esc.class, "ESC", ""), true);  // no displacement
+
+
+
+
+
+
+        config(c, "1111_0000",  S( 2, Lock.class, "", ""));
+        config(c, "001*_*110",  S( 2, Segment.class, "", ""));
+
+        return c;
     }
 
     public static class Clc extends Cpu.Opcode {
