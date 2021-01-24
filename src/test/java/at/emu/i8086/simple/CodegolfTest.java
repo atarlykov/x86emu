@@ -1,4 +1,4 @@
-package at.emu.i8086;
+package at.emu.i8086.simple;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -85,6 +85,7 @@ public class CodegolfTest {
             }
         }
 
+        scr(cpu);
         Assertions.assertEquals(EXPECTED_OUTPUT, result.toString());
     }
 

@@ -1,4 +1,4 @@
-package at.emu.i8086;
+package at.emu.i8086.simple;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -865,14 +865,13 @@ public class Cpu
 
     /**
      * resets cpu to the initial state
-     * todo: must be 0xF000:FFF0
      */
     void reset() {
         Arrays.fill(registers, 0x0000);
         Arrays.fill(segments, 0x0000);
-        //seg[CS] = 0xFFFF;
+        segments[CS] = 0xF000;
+        ip = 0xFFF0;
         flags = 0;
-        ip = 0;
         hlt = false;
         overrideSegmentIndex = -1;
     }
@@ -1594,7 +1593,7 @@ public class Cpu
         }
 
         /**
-         * DSL method to populate configuration map with another opcode
+         * DSL method to populate configuration map with another one byte opcode (no mrr byte)
          * opMask can contain '01*_' characters where:
          * 0|1 - zero or one in the appropriate position of key
          *  '_' - divider, will be ignored
@@ -1609,7 +1608,7 @@ public class Cpu
         }
 
         /**
-         * DSL method to populate configuration map with another opcode
+         * DSL method to populate configuration map with another one byte opcode (no mrr byte)
          * opMask can contain '01*_' characters where:
          * 0|1 - zero or one in the appropriate position of key
          *  '_' - divider, will be ignored

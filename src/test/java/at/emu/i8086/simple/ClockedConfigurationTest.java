@@ -1,5 +1,6 @@
-package at.emu.i8086;
+package at.emu.i8086.simple;
 
+import at.emu.i8086.simple.Cpu;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -87,10 +88,49 @@ public class ClockedConfigurationTest {
                 }
             }
         });
-
-
-
         //Assertions.assertEquals(EXPECTED_OUTPUT, result.toString());
+    }
+
+    /**
+     * dumps clocked configuration
+     */
+    @Test
+    public void dump()
+    {
+        Cpu cpu = new Cpu();
+
+        // merge clocked configuration
+        Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> clConfig = new HashMap<>();
+        for (int i = 0; i < cpu.configurations.length; i++) {
+            Cpu.ClockedOpcodeConfiguration cfgProvider = (Cpu.ClockedOpcodeConfiguration) cpu.configurations[i];
+            Map<String, Cpu.ClockedOpcodeConfiguration.Configuration> cc = cfgProvider.getClockedConfiguration();
+            Cpu.ClockedOpcodeConfiguration.merge(clConfig, cc);
+        }
+
+        // clocked configuration has much more details,
+        // go through them and compare against the original
+        clConfig.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
+        {
+            // value could be simple config or mrr
+            String key = entry.getKey();
+            Cpu.ClockedOpcodeConfiguration.Configuration clOpConfig = entry.getValue();
+
+            if (clOpConfig instanceof Cpu.ClockedOpcodeConfiguration.SimpleConfiguration)
+            {
+                // clocked config is simple, original MUST be simple too
+                Cpu.ClockedOpcodeConfiguration.SimpleConfiguration clOpConfigSimple = (Cpu.ClockedOpcodeConfiguration.SimpleConfiguration) clOpConfig;
+                System.out.printf("%8s  %3d  %s%n", key, clOpConfigSimple.clocks, clOpConfigSimple.opClass.getSimpleName());
+            }
+            else {
+                // clocked is MRR based
+                Cpu.ClockedOpcodeConfiguration.ModRegRmConfiguration clOpConfigMrr = (Cpu.ClockedOpcodeConfiguration.ModRegRmConfiguration) clOpConfig;
+                System.out.printf("%8s  MOD-REG-R/M%n", key);
+                clOpConfigMrr.mrr.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach( e -> {
+                    Cpu.ClockedOpcodeConfiguration.SimpleConfiguration value = e.getValue();
+                    System.out.printf("          %8s  %3d  %s%n", e.getKey(), value.clocks, value.opClass.getSimpleName());
+                });
+            }
+        });
     }
 
     public static void main(String[] args) throws Exception {

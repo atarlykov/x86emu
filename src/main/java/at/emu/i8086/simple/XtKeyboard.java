@@ -1,4 +1,4 @@
-package at.emu.i8086;
+package at.emu.i8086.simple;
 
 
 /**
