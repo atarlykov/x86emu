@@ -356,7 +356,7 @@ public class Add implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
                 cpu.flags |= (Cpu.FLAG_AF | Cpu.FLAG_CF);
             } else {
                 // clear af, cf
-                cpu.flags &= (~Cpu.FLAG_AF | ~Cpu.FLAG_CF);
+                cpu.flags &= ~(Cpu.FLAG_AF | Cpu.FLAG_CF);
             }
             // clear AL high nipple
             ax &= 0xFF0F;

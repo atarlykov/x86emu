@@ -444,7 +444,7 @@ public class Sub implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
                 cpu.flags |= (Cpu.FLAG_AF | Cpu.FLAG_CF);
             } else {
                 // clear af, cf
-                cpu.flags &= (~Cpu.FLAG_AF | ~Cpu.FLAG_CF);
+                cpu.flags &= ~(Cpu.FLAG_AF | Cpu.FLAG_CF);
                 ax &= 0xFF0F;
             }
             cpu.registers[Cpu.AX] = ax;

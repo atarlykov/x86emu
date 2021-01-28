@@ -560,7 +560,7 @@ public class Jmp implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigurat
         public void execute(Cpu cpu, int opcode)
         {
             int offset = cpu.ipRead8WithSign();
-            int cx = cpu.registers[Cpu.CX] - 1;
+            int cx = cpu.registers[Cpu.CX];
             if (cx == 0) {
                 cpu.ip = (cpu.ip + offset) & 0xFFFF;
             }

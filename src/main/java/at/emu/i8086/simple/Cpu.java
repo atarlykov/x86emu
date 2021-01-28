@@ -129,7 +129,7 @@ public class Cpu
     public void interrupt(int number)
     {
         push16(flags);
-        flags &= (~Cpu.FLAG_TF | ~Cpu.FLAG_IF);
+        flags &= ~(Cpu.FLAG_TF | Cpu.FLAG_IF);
         push16(registers[Cpu.CS]);
         push16(ip);
 

@@ -683,7 +683,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
                 cpu.writeByModRegRm(w, value);
             }
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
         }
     }
@@ -701,7 +701,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = imm & cpu.mrrModValue;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeByModRegRm(w, value);
         }
@@ -720,7 +720,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = cpu.registers[Cpu.AX] & imm;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeRegister(w, Cpu.AX, value);
         }
@@ -739,7 +739,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             final int imm = cpu.ipRead8WithSign();
             final int value = imm & cpu.mrrModValue;
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeByModRegRm(w, value);
         }
@@ -753,7 +753,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
 
             final int value = cpu.mrrRegValue & cpu.mrrModValue;
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
         }
     }
@@ -771,7 +771,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = imm & cpu.mrrModValue;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
         }
     }
@@ -789,7 +789,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = cpu.registers[Cpu.AX] & imm;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
         }
     }
@@ -801,7 +801,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             final int imm = cpu.ipRead8WithSign();
             final int value = imm & cpu.mrrModValue;
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
         }
     }
@@ -823,7 +823,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
                 cpu.writeByModRegRm(w, value);
             }
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
         }
     }
@@ -841,7 +841,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = imm ^ cpu.mrrModValue;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeByModRegRm(w, value);
         }
@@ -860,7 +860,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = cpu.registers[Cpu.AX] ^ imm;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeRegister(w, Cpu.AX, value);
         }
@@ -875,7 +875,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             final int imm = cpu.ipRead8WithSign();
             final int value = imm ^ cpu.mrrModValue;
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeByModRegRm(w, value);
         }
@@ -898,7 +898,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
                 cpu.writeByModRegRm(w, value);
             }
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
         }
     }
@@ -916,7 +916,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = imm | cpu.mrrModValue;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeByModRegRm(w, value);
         }
@@ -935,7 +935,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             }
 
             final int value = cpu.registers[Cpu.AX] | imm;
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeRegister(w, Cpu.AX, value);
         }
@@ -949,7 +949,7 @@ public class Logic implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcodeConfigur
             final int imm = cpu.ipRead8WithSign();
             final int value = imm | cpu.mrrModValue;
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
             Cpu.Opcode.flagsPsz(cpu, w, value);
             cpu.writeByModRegRm(w, value);
         }

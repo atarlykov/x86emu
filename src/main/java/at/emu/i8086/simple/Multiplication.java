@@ -81,7 +81,7 @@ public class Multiplication implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcod
                 if ((value & 0xFFFF0000) != 0) {
                     cpu.flags |= (Cpu.FLAG_OF | Cpu.FLAG_CF);
                 } else {
-                    cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+                    cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
                 }
                 cpu.writeRegisterWord(Cpu.AX, value);
                 cpu.writeRegisterWord(Cpu.DX, value >> 16);
@@ -91,7 +91,7 @@ public class Multiplication implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcod
                 if ((value & 0xFF00) != 0) {
                     cpu.flags |= (Cpu.FLAG_OF | Cpu.FLAG_CF);
                 } else {
-                    cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+                    cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
                 }
                 cpu.writeRegisterWord(Cpu.AX, value);
             }
@@ -111,7 +111,7 @@ public class Multiplication implements Cpu.OpcodeConfiguration, Cpu.ClockedOpcod
         {
             boolean w = (opcode & 0b0000_0001) == 0b01;
 
-            cpu.flags &= (~Cpu.FLAG_OF | ~Cpu.FLAG_CF);
+            cpu.flags &= ~(Cpu.FLAG_OF | Cpu.FLAG_CF);
 
             if (w) {
                 int value = cpu.registers[Cpu.AX] * cpu.mrrModValue;
